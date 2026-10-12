@@ -4970,3 +4970,6 @@ button.ios-row:active {
   /* placing furniture: tools sit under the top bar, clear of the sheet and tab bar */
   .deco-bar { top: calc(66px + env(safe-area-inset-top)) !important; bottom: auto !important; }
 }
+.furn-tools { display: flex; gap: 6px; flex-wrap: wrap; }
+.furn-tools button { border: 0; border-radius: 999px; padding: 7px 12px; background: #f1f3f7; font: inherit; font-size: 0.8rem; font-weight: 700; color: #1f2d45; }
+.furn-tools button:active { background: #e3e7ee; }

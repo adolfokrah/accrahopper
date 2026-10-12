@@ -125,9 +125,14 @@ function HomeUpgrades() {
         <span>
           🧱 Extend the room {ext > 0 && <Chip tone="blue">{ext}/{EXTENSIONS.length} built</Chip>}
           <small className="muted block">
-            {!own ? 'Only homes you own can be extended. Buy or build a house.' : nextExt ? UPGRADES.find((u) => u.id === nextExt)?.blurb : 'Fully extended. This is as big as it gets.'}
+            {!own
+              ? HOMES[tier].buy > 0
+                ? `You rent this home, and landlords do not allow building works. Buy it at Accra Realty for ${formatMoney(HOMES[tier].buy)} (then no more rent), or build your own house on land.`
+                : 'You rent this room, and the landlady does not allow building works. Buy a home or build a house on your own land to extend.'
+              : nextExt ? UPGRADES.find((u) => u.id === nextExt)?.blurb : 'Fully extended. This is as big as it gets.'}
           </small>
         </span>
+        {!own && <Btn small kind="soft" disabled={!!s.activity} onClick={() => { useUI.getState().setPanel('none'); walkToDest('realty') }}>🧭 Accra Realty</Btn>}
         {own && nextExt && (() => {
           const u = UPGRADES.find((x) => x.id === nextExt)!
           return <Btn small disabled={s.money < u.price} onClick={() => { useGame.getState().buyUpgrade(u.id); sfx('coin') }}>{formatMoney(u.price)}</Btn>
@@ -233,16 +238,22 @@ function Inside() {
     >
       <div className="tabs">
         <button className={!edit ? 'on' : ''} onClick={() => setEdit(false)}>Use</button>
-        <button className={edit ? 'on' : ''} onClick={() => setEdit(true)}>Decorate</button>
+        <button className={edit ? 'on' : ''} onClick={() => setEdit(true)}>✋ Move & decorate</button>
       </div>
 
       {!edit && (
         <>
           {!sel && <PetCard />}
-          {!sel && <p className="blurb">Tap any furniture in the room to use it: beds, showers, kitchen, sofa, TV, bar, piano and more.</p>}
+          {!sel && <p className="blurb">Tap any furniture to use it, move it or turn it. For buying and arranging, open ✋ Move & decorate.</p>}
           {sel && (
             <>
               <div className="here">{FURNITURE[sel.type].emoji} {FURNITURE[sel.type].name}</div>
+              {/* move, turn or store it straight from here */}
+              <div className="furn-tools">
+                <button onClick={() => { sfx('click'); useUI.setState({ editMode: true, holdingUid: sel.id, holdRot: sel.rot, selectedFurniture: null }); if (window.innerWidth < 760) useUI.setState({ panel: 'none' }) }}>✋ Move</button>
+                <button onClick={() => { sfx('click'); if (!useGame.getState().placeFurniture(sel.id, sel.x, sel.y, sel.rot === 0 ? 1 : 0)) useUI.setState({ editMode: true, holdingUid: sel.id, holdRot: sel.rot === 0 ? 1 : 0, selectedFurniture: null }) }}>↻ Rotate</button>
+                {!sel.fixture && <button onClick={() => { sfx('click'); useGame.getState().storeFurniture(sel.id); useUI.setState({ selectedFurniture: null }) }}>📦 Store</button>}
+              </div>
               {(() => {
                 const list = activitiesForFurniture(s, sel.id)
                 if (!list.length) return <small className="muted">{FURNITURE[sel.type].blurb} (Decoration only. It adds comfort.)</small>
