@@ -527,8 +527,11 @@ let lostAttempts = 0
 
 export default function World3D({ onFail }: { onFail: () => void }) {
   const quality = useUI((s) => QUALITY[s.settings.quality])
+  // the character creator covers the city: stop redrawing it so the creator opens fast on phones
+  const idle = useGame((s) => s.screen === 'create')
   return (
     <Canvas
+      frameloop={idle ? 'never' : 'always'}
       orthographic
       shadows={quality.shadows}
       dpr={quality.dpr}

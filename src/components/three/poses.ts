@@ -92,6 +92,8 @@ export function furnitureUse(type: FurnitureType, actId: string): FurnUse {
     case 'shower':
     case 'shower_rain': return { dx: 0, dz: 0, face: 0, pose: 'clean' }
     case 'fridge': return actId === 'snack' ? { dx: 0, dz: 0.75, face: 0, pose: 'snack', prop: 'plate' } : { dx: 0, dz: 0.75, face: PI, pose: 'cook', prop: 'spoon' }
+    case 'coalpot': return { dx: 0, dz: 0.7, face: PI, pose: 'cook', prop: 'spoon' }
+    case 'stove': return { dx: 0, dz: 0.75, face: PI, pose: 'cook', prop: 'spoon' }
     case 'sofa': return { dx: 0, dz: 0.12, face: 0, pose: 'sit', prop: 'phone' }
     case 'tv': return { dx: 0, dz: 1.6, face: PI, pose: 'kneel' }
     case 'computer': return { dx: 0, dz: 0.62, face: PI, pose: 'desk' }

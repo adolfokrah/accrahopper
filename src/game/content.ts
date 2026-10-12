@@ -875,6 +875,8 @@ export const FURNITURE: Record<FurnitureType, FurnitureDef> = {
   bookshelf: { type: 'bookshelf', name: 'Bookshelf', emoji: '📚', w: 1, d: 1, price: 450, comfort: 1, blurb: 'Read to grow Communication.' },
   plant: { type: 'plant', name: 'Potted palm', emoji: '🪴', w: 1, d: 1, price: 120, comfort: 3, blurb: 'Fresh air. Boosts sleep quality.' },
   fan: { type: 'fan', name: 'Standing fan', emoji: '🌀', w: 1, d: 1, price: 300, comfort: 4, blurb: 'Cooler nights, better sleep.' },
+  coalpot: { type: 'coalpot', name: 'Coal pot', emoji: '🔥', w: 1, d: 1, price: 60, comfort: 0, blurb: 'Charcoal stove, the compound-house kitchen. Cook your own meals.' },
+  stove: { type: 'stove', name: 'Gas cooker', emoji: '🍳', w: 2, d: 1, price: 650, comfort: 2, blurb: 'Two-burner gas cooker with an oven. Cook faster and better.' },
   wall: { type: 'wall', name: 'Wall (1 m)', emoji: '🧱', w: 1, d: 1, price: 120, comfort: 0, build: true, blurb: 'Block wall section. Rotate to run it the other way.' },
   wall_long: { type: 'wall_long', name: 'Wall (3 m)', emoji: '🧱', w: 3, d: 1, price: 320, comfort: 0, build: true, blurb: 'Long wall to split the room in two.' },
   wall_half: { type: 'wall_half', name: 'Half wall', emoji: '🪵', w: 2, d: 1, price: 180, comfort: 1, build: true, blurb: 'Waist-high divider, like a kitchen counter.' },
@@ -893,7 +895,7 @@ export const RENT_OUT = {
   /** Daily rent from a boys' quarters flat. */
   flat: [90, 140] as [number, number],
 }
-export const SHOP_FURNITURE: FurnitureType[] = ['fridge', 'sofa', 'computer', 'tv', 'bookshelf', 'plant', 'fan', 'bed_double']
+export const SHOP_FURNITURE: FurnitureType[] = ['coalpot', 'stove', 'fridge', 'sofa', 'computer', 'tv', 'bookshelf', 'plant', 'fan', 'bed_double']
 export const isBed = (t: FurnitureType) => t.startsWith('bed_')
 
 export interface HomeDef {
@@ -918,8 +920,9 @@ export const HOMES: Record<HomeTier, HomeDef> = <Record<HomeTier, HomeDef>>{
       { type: 'bed_basic', x: 0, y: 0, rot: 0 },
       { type: 'toilet', x: 5, y: 0, rot: 0 },
       { type: 'shower', x: 5, y: 1, rot: 0 },
+      { type: 'coalpot', x: 5, y: 3, rot: 0 },
     ],
-    amenities: ['6×5 room', 'Foam mattress', 'Shared compound', 'Shared bucket shower'],
+    amenities: ['6×5 room', 'Foam mattress', 'Shared compound', 'Shared bucket shower', 'Coal pot for cooking'],
   },
   apartment: {
     tier: 'apartment', name: 'Apartment', destId: 'apartment', rent: 900, buy: 22000, grid: { w: 8, d: 6 }, door: { x: 3, y: 5 }, comfort: 6, floor: '#d8c8a8',
@@ -928,6 +931,7 @@ export const HOMES: Record<HomeTier, HomeDef> = <Record<HomeTier, HomeDef>>{
       { type: 'toilet', x: 7, y: 0, rot: 0 },
       { type: 'shower', x: 7, y: 1, rot: 0 },
       { type: 'fridge', x: 0, y: 5, rot: 0 },
+      { type: 'stove', x: 1, y: 5, rot: 0 },
     ],
     amenities: ['8×6 flat', 'Queen bed', 'Built-in fridge', 'Balcony', 'Power backup'],
   },
@@ -938,6 +942,7 @@ export const HOMES: Record<HomeTier, HomeDef> = <Record<HomeTier, HomeDef>>{
       { type: 'toilet', x: 9, y: 0, rot: 0 },
       { type: 'shower_rain', x: 9, y: 1, rot: 0 },
       { type: 'fridge', x: 0, y: 6, rot: 0 },
+      { type: 'stove', x: 1, y: 6, rot: 0 },
       { type: 'sofa', x: 4, y: 0, rot: 0 },
       { type: 'tv', x: 6, y: 0, rot: 0 },
     ],
@@ -952,6 +957,7 @@ HOMES.house = {
     { type: 'toilet', x: 9, y: 0, rot: 0 },
     { type: 'shower_rain', x: 9, y: 1, rot: 0 },
     { type: 'fridge', x: 0, y: 7, rot: 0 },
+    { type: 'stove', x: 1, y: 7, rot: 0 },
   ],
   amenities: ['10×8 house you built', 'No rent ever', 'King bed', 'Rain shower', 'Compound and garden'],
 }
@@ -1269,6 +1275,12 @@ export const FURNITURE_ACTIVITIES: Partial<Record<FurnitureType, ActivityDef[]>>
   ],
   shower_rain: [
     A({ id: 'h_shower', label: 'Take a rain shower', blurb: 'Spa-grade comfort.', icon: '🚿', kind: 'generic', minutes: 15, needs: { hygiene: 100, fun: 4 }, maxNeed: { hygiene: 95 } }),
+  ],
+  coalpot: [
+    A({ id: 'cook', label: 'Cook on the coal pot', blurb: 'Light the charcoal and cook jollof or banku. Groceries included.', icon: '🔥', kind: 'meal', minutes: 60, cost: 18, needs: { hunger: 40, fun: 2, hygiene: -3 }, skillXp: { cooking: 6 }, skillNeedBonus: { skill: 'cooking', need: 'hunger', perLevel: 2 } }),
+  ],
+  stove: [
+    A({ id: 'cook', label: 'Cook a meal', blurb: 'Groceries included. Better with Cooking skill.', icon: '🍳', kind: 'meal', minutes: 40, cost: 22, needs: { hunger: 45, fun: 4, bladder: -3 }, skillXp: { cooking: 7 }, skillNeedBonus: { skill: 'cooking', need: 'hunger', perLevel: 2 } }),
   ],
   fridge: [
     A({ id: 'cook', label: 'Cook a meal', blurb: 'Groceries included. Better with Cooking skill.', icon: '🍳', kind: 'meal', minutes: 45, cost: 22, needs: { hunger: 40, fun: 3, bladder: -3 }, skillXp: { cooking: 6 }, skillNeedBonus: { skill: 'cooking', need: 'hunger', perLevel: 2 } }),

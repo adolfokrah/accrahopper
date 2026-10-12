@@ -203,7 +203,7 @@ function Inside() {
 
       {!edit && (
         <>
-          {!sel && <p className="blurb">Tap a bed, shower, toilet, fridge, sofa or computer in the room to use it.</p>}
+          {!sel && <p className="blurb">Tap a bed, shower, toilet, coal pot or cooker, fridge, sofa or computer in the room to use it.</p>}
           {sel && (
             <>
               <div className="here">{FURNITURE[sel.type].emoji} {FURNITURE[sel.type].name}</div>

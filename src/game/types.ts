@@ -55,6 +55,8 @@ export type FurnitureType =
   | 'bookshelf'
   | 'plant'
   | 'fan'
+  | 'coalpot'
+  | 'stove'
   | 'wall'
   | 'wall_long'
   | 'wall_half'

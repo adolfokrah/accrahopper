@@ -1,5 +1,6 @@
 'use client'
 import dynamic from 'next/dynamic'
+import { useEffect, useState } from 'react'
 import { HAIR_COLORS, OUTFITS, OUTFIT_COLORS, SKIN_TONES } from '@/game/content'
 import type { Appearance } from '@/game/types'
 import { useUI } from '@/game/ui'
@@ -29,9 +30,17 @@ function AvatarSvg({ a }: { a: Appearance }) {
   )
 }
 
+/** Phones get the flat avatar: a second 3D view is slow to start there. Desktops load the 3D one just after the screen shows. */
 export function AvatarPreview({ appearance, size = 220 }: { appearance: Appearance; size?: number }) {
   const webgl = useUI((s) => s.webgl)
-  const flat = webgl === 'failed'
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    const phone = window.matchMedia('(max-width: 760px), (pointer: coarse)').matches
+    if (phone) return
+    const t = setTimeout(() => setReady(true), 250)
+    return () => clearTimeout(t)
+  }, [])
+  const flat = webgl === 'failed' || !ready
   return (
     <div className="avatar" style={{ width: size, height: size * 1.15 }}>
       {flat ? <AvatarSvg a={appearance} /> : <Preview3D appearance={appearance} />}
