@@ -5,8 +5,8 @@ import { friendIndex, friendName, friendPoints, isOpen, levelFromXp } from '@/ga
 import { BALANCE, GAME_CONFIG, dayOf, formatClock, formatMoney, hourOf } from '@/game/config'
 import { AREAS, AREA_BY_ID, CAREERS, CAREER_IDS, DESTINATIONS, DEST_BY_ID, HOMES, NPCS, SKILLS } from '@/game/content'
 import { walkToDest } from '@/game/nav'
-import { QUICK_MESSAGES, canRentOut, loanLimit, missingRequirements, rentOutRange, useGame } from '@/game/store'
-import { BIZ, HOME_SELL_BACK, SELL_BACK, PROJECTS, projectStages, BUSINESSES, BUSINESS_BY_ID, DRIVING, FINANCE, LOAN, PLOTS, STOCKS, VEHICLES, VEHICLE_IDS, homeDestId } from '@/game/content'
+import { QUICK_MESSAGES, canRentOut, cleanCash, launderCap, loanLimit, missingRequirements, rentOutRange, useGame } from '@/game/store'
+import { LAUNDER, BIZ, HOME_SELL_BACK, SELL_BACK, PROJECTS, projectStages, BUSINESSES, BUSINESS_BY_ID, DRIVING, FINANCE, LOAN, PLOTS, STOCKS, VEHICLES, VEHICLE_IDS, homeDestId } from '@/game/content'
 import { plotValue } from '@/game/property'
 import { GOALS, TASK_BY_ID, taskProgress } from '@/game/life'
 import { LifeGoalsList } from './LifeUI'
@@ -36,7 +36,7 @@ const APPS: AppDef[] = [
 const DOCK: AppDef[] = [
   { id: 'chat', name: 'Chat', glyph: '💬', bg: 'linear-gradient(160deg,#6ef08a,#21c24a)' },
   { id: 'maps', name: 'Maps', glyph: '🧭', bg: 'linear-gradient(160deg,#9ee8b0,#3fb6d9)' },
-  { id: 'wallet', name: 'MoMo', glyph: '📲', bg: 'linear-gradient(160deg,#ffe14d,#ffc300)' },
+  { id: 'wallet', name: 'MoMo', glyph: '📲', bg: 'linear-gradient(160deg,#ffd51a,#ffbf00)' },
   { id: 'contacts', name: 'Contacts', glyph: '👤', bg: 'linear-gradient(160deg,#d7dbe0,#a6adb6)' },
 ]
 const TITLES: Record<string, string> = { assets: 'Assets', jobs: 'Jobs', skills: 'Skills', maps: 'Maps', wallet: 'MoMo', contacts: 'Contacts', messages: 'Alerts', calendar: 'Calendar', music: 'Music' }
@@ -81,6 +81,8 @@ function Icon({ app, badge }: { app: AppDef; badge?: number }) {
       <span className="ios-icon" style={{ background: app.bg }}>
         {app.id === 'calendar' ? (
           <span className="cal-glyph"><small>DAY</small><b>{dayOf(minutes)}</b></span>
+        ) : app.id === 'wallet' ? (
+          <span className="momo-glyph" aria-hidden><b>MoMo</b><i>●</i></span>
         ) : (
           <span className="glyph">{app.glyph}</span>
         )}
@@ -402,10 +404,11 @@ function Wallet() {
     <AppShell title="Wallet">
       <div className="pay-card">
         <div className="pc-top"><b>MoMo</b><span>Mobile Money Wallet</span></div>
-        <div className="pc-bal"><small>Balance</small><b>{formatMoney(s.money)}</b></div>
+        <div className="pc-bal"><small>Balance</small><b>{formatMoney(s.money)}</b>{s.dirty > 0 && <small className="pc-split">{formatMoney(cleanCash(s))} clean · {formatMoney(s.dirty)} dirty</small>}</div>
         <div className="pc-bot"><span>{s.profile?.name?.toUpperCase()}</span><span>•••• 2333</span></div>
       </div>
       <p className="ios-foot center">Fictional {GAME_CONFIG.currency.name} ({GAME_CONFIG.currency.code}). Saved on this device only.</p>
+      <Laundering />
       <SendMoney />
       <QuickLoan />
       <Group header="Last 7 days">
@@ -570,6 +573,34 @@ function SendMoney() {
           ))}
         </div>
       )}
+    </Group>
+  )
+}
+
+/** Turn crime cash into money the bank and sellers accept. */
+function Laundering() {
+  const s = useGame()
+  if (s.dirty <= 0) return null
+  const owned = Object.keys(s.businesses).filter((id) => BUSINESS_BY_ID[id])
+  const here = s.view === 'inside' ? s.insideDest : s.nearDest
+  const atForex = here === LAUNDER.forex.dest
+  const forexRate = s.rep.street >= 40 ? LAUNDER.forex.streetFee : LAUNDER.forex.fee
+  const forexAmt = Math.min(s.dirty, LAUNDER.forex.max)
+  return (
+    <Group header="Dirty cash" footer={`Crime pays in dirty cash. Big buys (GH₵1,000+) and bank deposits need clean money, and police keep any unexplained cash they find on you.`}>
+      <Row icon="💸" iconBg="#ff3b30" title="Dirty cash in your wallet" detail={formatMoney(s.dirty)} />
+      {owned.map((id) => {
+        const b = BUSINESS_BY_ID[id]
+        const cap = launderCap(s, id)
+        const amt = Math.min(cap, s.dirty)
+        return (
+          <Row key={id} icon={b.emoji} iconBg="#34c759" title={`Book it as ${b.name} sales`} sub={cap > 0 ? `${Math.round(LAUNDER.business.fee * 100)}% fee · up to ${formatMoney(cap)} more today · small risk of a tax audit` : 'The till is full for today'}
+            detail={cap > 0 ? <button className="ios-chip amount" onClick={() => { sfx('coin'); useGame.getState().launder('business', amt, id) }}>Launder {formatMoney(amt)}</button> : undefined} />
+        )
+      })}
+      {!owned.length && <Row icon="🏪" iconBg="#8e8e93" title="Own a business to launder cheaply" sub="Buy one in the Assets app: its till can absorb dirty cash every day." />}
+      <Row icon="💱" iconBg="#ff9500" title="Makola forex boys" sub={atForex ? `${Math.round(forexRate * 100)}% commission · up to ${formatMoney(LAUNDER.forex.max)} a time · police stings happen` : 'Go to Makola Market to swap cash with the forex boys.'}
+        detail={atForex ? <button className="ios-chip amount" onClick={() => { sfx('coin'); useGame.getState().launder('forex', forexAmt) }}>Swap {formatMoney(forexAmt)}</button> : <button className="ios-chip amount" onClick={() => directions(LAUNDER.forex.dest)}>📍 Go</button>} />
     </Group>
   )
 }

@@ -1139,8 +1139,20 @@ export const OFFICERS = {
   cautious: { name: 'Sergeant Ofori', note: 'looks around nervously. Hard to read.', accept: 0.5 },
   honest: { name: 'Inspector Badu', note: 'wears a name badge and a body camera. Strictly by the book.', accept: 0 },
 }
-export const CHARGES = { theft: { name: 'theft', fine: 300 }, robbery: { name: 'armed robbery', fine: 1500 }, bribery: { name: 'attempted bribery of a public officer', fine: 800 }, licence: { name: 'licence fraud', fine: 600 }, soliciting: { name: 'soliciting', fine: 400 }, galamsey: { name: 'illegal mining (galamsey)', fine: 2500 }, fraud: { name: 'cyber fraud', fine: 3000 }, smuggling: { name: 'smuggling', fine: 2200 } }
-export const LEGAL = { custodyMinutes: 720, courtDays: 2, fine: 300, lawyer: 400, jailGuilty: 3, jailConvicted: 7, jailWarrant: 5, jailScale: 720 }
+export const CHARGES = { theft: { name: 'theft', fine: 300 }, robbery: { name: 'armed robbery', fine: 1500 }, laundering: { name: 'money laundering', fine: 2000 }, bribery: { name: 'attempted bribery of a public officer', fine: 800 }, licence: { name: 'licence fraud', fine: 600 }, soliciting: { name: 'soliciting', fine: 400 }, galamsey: { name: 'illegal mining (galamsey)', fine: 2500 }, fraud: { name: 'cyber fraud', fine: 3000 }, smuggling: { name: 'smuggling', fine: 2200 } }
+/** Cleaning dirty cash. Business: low fee and risk, but capped by the till each day. Makola forex boys: any amount, pricier, police stings. */
+export const LAUNDER = {
+  business: { fee: 0.1, auditChance: 0.05, auditFine: 0.3, capDays: 3 },
+  forex: { fee: 0.2, streetFee: 0.15, max: 5000, stingChance: 0.1, dest: 'market' },
+}
+/** Activities that earn respect in the community when completed. */
+export const RESPECT_ACTS: Record<string, number> = { service: 3, prayer: 1, choir: 2, volunteer: 4, watch: 4, wedding: 2, donate: 6, lecture: 1, wassce: 1, debate: 1 }
+/** Street cred needed to be trusted with illegal work. */
+export const STREET_REQ: Partial<Record<string, number>> = { sakawa: 15, smuggler: 30 }
+/** Careers that run a background check: minimum respect. */
+export const RESPECT_REQ: Partial<Record<string, number>> = { banker: 25, teacher: 20, nurse: 20 }
+/** Courts and prison. Scales are game minutes per real second: custody ≈ 18 s, a prison day ≈ 24 s (7 days ≈ 3 min). */
+export const LEGAL = { custodyMinutes: 720, custodyScale: 40, courtDays: 2, fine: 300, lawyer: 400, bail: 250, jailGuilty: 3, jailConvicted: 7, jailWarrant: 5, jailScale: 60 }
 
 /* ------------------------------ businesses you can own ------------------------------ */
 export interface BusinessDef {
@@ -1279,6 +1291,7 @@ export const DEST_ACTIVITIES: Record<string, ActivityDef[]> = {
     A({ id: 'debate', label: 'Join the debate club', blurb: 'Win arguments, gain confidence.', icon: '🎙️', kind: 'social', minutes: 90, needs: { social: 15, fun: 8 }, skillXp: { communication: 10 }, hours: [15, 19] }),
   ],
   church: [
+    A({ id: 'donate', label: 'Give to the church building fund', blurb: 'GH₵200 in the offering bowl. The congregation notices. Raises respect.', icon: '⛪', kind: 'social', minutes: 20, cost: 200, needs: { social: 6, fun: 4 }, dailyLimit: 1 }),
     A({ id: 'service', label: 'Sunday service', blurb: 'Praise, worship and fellowship. Sundays only.', icon: '🙏', kind: 'social', minutes: 180, needs: { social: 25, fun: 15, energy: -6 }, require: 'sunday', hours: [7, 13] }),
     A({ id: 'prayer', label: 'Quiet prayer', blurb: 'A moment of peace.', icon: '🕯️', kind: 'generic', minutes: 30, needs: { fun: 6, social: 3 } }),
     A({ id: 'choir', label: 'Choir practice', blurb: 'Sing your heart out.', icon: '🎤', kind: 'social', minutes: 90, needs: { social: 15, fun: 15, energy: -6 }, skillXp: { communication: 5 }, hours: [16, 20] }),

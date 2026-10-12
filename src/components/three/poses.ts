@@ -53,7 +53,7 @@ export const ACT_LOOK: Record<string, ActLook> = {
   // dates
   date: { pose: 'talk' }, spray: { pose: 'dance' }, popbottle: { pose: 'cheer', prop: 'drink' }, intimate: { pose: 'lie' }, hookup_m: { pose: 'dance' }, hookup: { pose: 'dance' },
   // jail / custody
-  custody: { pose: 'sit' }, jail: { pose: 'sit' },
+  custody: { pose: 'sit' }, jail: { pose: 'sit' }, remand: { pose: 'sit' },
 }
 
 /** Job-specific work looks. */

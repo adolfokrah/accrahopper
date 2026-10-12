@@ -17,7 +17,7 @@ export interface SaveEnvelope {
 const SAVE_KEYS: (keyof SavedGame)[] = [
   'profile', 'minutes', 'money', 'needs', 'skills', 'careers', 'employment', 'housing', 'inventory', 'friendships',
   'transactions', 'player', 'view', 'insideDest', 'viewing', 'tutorial', 'stats', 'daily', 'activity', 'event', 'result', 'eventCooldownUntil',
-  'rentWarnedFor', 'lowFlags', 'nextId', 'health', 'legal', 'romance', 'edu', 'owned', 'plots', 'license', 'vehicles', 'rentedDay', 'upgrades', 'rentedOut', 'tenants', 'homeStyle', 'bank',
+  'rentWarnedFor', 'lowFlags', 'nextId', 'health', 'legal', 'romance', 'edu', 'owned', 'plots', 'license', 'vehicles', 'rentedDay', 'upgrades', 'rentedOut', 'tenants', 'dirty', 'rep', 'laundered', 'homeStyle', 'bank',
   'invest', 'tasks', 'today', 'goals', 'goalsActive', 'lifeFlags', 'visited', 'chats', 'chatUnread', 'chatDay', 'groups', 'loan', 'credit', 'items', 'ticket', 'businesses',
 ]
 
@@ -140,6 +140,14 @@ function sanitize(raw: unknown): SavedGame {
   out.goalsActive = Array.isArray(g.goalsActive) ? g.goalsActive.filter((k: unknown) => typeof k === 'string') : []
   out.lifeFlags = obj(g.lifeFlags) ? Object.fromEntries(Object.entries<unknown>(g.lifeFlags).filter(([, v]) => isNum(v))) as Record<string, number> : {}
   out.rentedOut = Array.isArray(g.rentedOut) ? g.rentedOut.filter((k: unknown) => typeof k === 'string') : []
+  out.dirty = isNum(g.dirty) ? Math.max(0, Math.min(g.dirty, out.money)) : 0
+  // older saves: give illegal workers the street cred their job implies
+  const illegalJob = !!(out.employment && CAREERS[out.employment]?.illegal)
+  out.rep = obj(g.rep) && isNum(g.rep.street) && isNum(g.rep.respect)
+    ? { street: clamp(g.rep.street), respect: clamp(g.rep.respect) }
+    : { street: illegalJob ? 30 : Math.min(40, (out.legal?.record ?? 0) * 10), respect: Math.max(5, 30 - (out.legal?.record ?? 0) * 10) }
+  out.laundered = {}
+  if (obj(g.laundered)) for (const [k, v] of Object.entries<any>(g.laundered)) if (obj(v) && isNum(v.day) && isNum(v.amount)) out.laundered[k] = { day: v.day, amount: v.amount }
   out.tenants = {}
   if (obj(g.tenants))
     for (const [k, v] of Object.entries<any>(g.tenants))

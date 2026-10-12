@@ -36,6 +36,10 @@ import {
   LOAN,
   OFFICERS,
   CHARGES,
+  LAUNDER,
+  RESPECT_ACTS,
+  RESPECT_REQ,
+  STREET_REQ,
   STREET_CHARGE,
   LEGAL,
   NPCS,
@@ -134,6 +138,12 @@ export interface GameState {
   nextId: number
   health: { illness: IllnessId | null; mild: boolean; since: number; nhis: boolean; protectedUntil: number }
   legal: { heat: number; caseDeadline: number | null; record: number; charge?: string; fine?: number }
+  /** Part of the wallet that came from crime. Big legal purchases and bank deposits need clean cash. */
+  dirty: number
+  /** Street cred (respect among hustlers and criminals) and respect (standing with ordinary people), 0–100. */
+  rep: { street: number; respect: number }
+  /** Cash laundered through each business today (business id: { day, amount }). */
+  laundered: Record<string, { day: number; amount: number }>
   romance: { partner: string | null; stage: 'dating' | 'engaged' | 'married' | null; dates: number; ring: boolean; askedDay: number }
   edu: { program: ProgramId | null; credits: number; degrees: ProgramId[] }
   owned: HomeTier[]
@@ -187,6 +197,8 @@ export interface GameState {
   sellBusiness: (id: string) => void
   dismissResult: () => void
   applyForJob: (career: CareerId) => void
+  /** Turn dirty cash clean through a business you own or the Makola forex boys. */
+  launder: (method: 'business' | 'forex', amount: number, bizId?: string) => void
   quitJob: () => void
   requestTravel: (fromDest: string, toDest: string) => void
   chooseEvent: (i: number) => void
@@ -299,6 +311,9 @@ export const freshGame = (profile: Profile | null): SavedGame => ({
   nextId: 1,
   health: { illness: null, mild: true, since: 0, nhis: false, protectedUntil: 0 },
   legal: { heat: 0, caseDeadline: null, record: 0 },
+  dirty: 0,
+  rep: { street: 0, respect: 30 },
+  laundered: {},
   romance: { partner: null, stage: null, dates: 0, ring: false, askedDay: 0 },
   edu: { program: null, credits: 0, degrees: [] },
   owned: [],
@@ -348,6 +363,8 @@ function draft(s: GameState): GameState {
     lowFlags: { ...s.lowFlags },
     health: { ...s.health },
     legal: { ...s.legal },
+    rep: { ...s.rep },
+    laundered: { ...s.laundered },
     romance: { ...s.romance },
     edu: { ...s.edu },
     plots: { ...s.plots },
@@ -376,12 +393,57 @@ function earn(d: GameState, amount: number, label: string, cat: TxCategory) {
   d.stats.moneyEarned += amount
   pushTx(d, label, amount, cat)
 }
-function spend(d: GameState, amount: number, label: string, cat: TxCategory) {
+/** `clean`: paid from clean cash only (big legal purchases); otherwise dirty cash is spent first, like any street cash. */
+function spend(d: GameState, amount: number, label: string, cat: TxCategory, clean = false) {
   if (amount <= 0) return
   d.money -= amount
+  d.dirty = clean ? Math.min(d.dirty, Math.max(0, d.money)) : Math.max(0, Math.min(d.dirty - amount, d.money))
   d.stats.moneySpent += amount
   pushTx(d, label, -amount, cat)
 }
+/** Crime proceeds: cash that has to be laundered before the bank or a seller will take it. */
+function earnDirty(d: GameState, amount: number, label: string) {
+  if (amount <= 0) return
+  earn(d, amount, label, 'bonus')
+  d.dirty += amount
+}
+/** Cash you can show the bank or a seller. */
+export const cleanCash = (s: Pick<GameState, 'money' | 'dirty'>) => Math.max(0, s.money - s.dirty)
+/** Purchases at or above this need clean cash. */
+export const CLEAN_MIN = 1000
+/** Why a big legal payment cannot be made with this wallet, or null. */
+export function needClean(s: Pick<GameState, 'money' | 'dirty'>, amount: number): string | null {
+  if (amount < CLEAN_MIN || cleanCash(s) >= amount) return null
+  return `💸 ${formatMoney(s.dirty)} of your cash is dirty and they ask where it came from. Launder it first (Phone → Wallet).`
+}
+/** Dirty cash a business till can still absorb today: three good days of takings per level. */
+export function launderCap(s: Pick<GameState, 'businesses' | 'laundered' | 'minutes'>, bizId: string): number {
+  const b = BUSINESS_BY_ID[bizId]
+  const own = s.businesses[bizId]
+  if (!b || !own) return 0
+  const used = s.laundered[bizId]?.day === dayOf(s.minutes) ? s.laundered[bizId].amount : 0
+  return Math.max(0, Math.round(b.income[1] * own.level * LAUNDER.business.capDays) - used)
+}
+/** Change reputation: street cred and respect, each 0–100. */
+function addRep(d: GameState, street: number, respect: number) {
+  d.rep = { street: clamp(d.rep.street + street), respect: clamp(d.rep.respect + respect) }
+}
+/** Legal wages scale with respect: 0.9× at 0, 1.0× at 50, 1.1× at 100. */
+export const respectPay = (s: Pick<GameState, 'rep'>) => 0.9 + s.rep.respect / 500
+/** Police find unexplained cash on you and keep it. */
+function seizeDirty(d: GameState, share: number, lines?: string[]) {
+  const take = Math.round(d.dirty * share)
+  if (take <= 0) return 0
+  d.money -= take
+  d.dirty -= take
+  d.stats.moneySpent += take
+  pushTx(d, 'Seized by police', -take, 'fee')
+  const msg = `👮 Police seized ${formatMoney(take)} of unexplained cash.`
+  if (lines) lines.push(msg)
+  else toast(msg, 'bad')
+  return take
+}
+
 function applyNeeds(d: GameState, delta: Partial<Needs>, factor = 1) {
   for (const [k, v] of Object.entries(delta) as [NeedId, number][]) d.needs[k] = clamp(d.needs[k] + v * factor)
 }
@@ -581,9 +643,17 @@ function finishActivity(d: GameState) {
     perf = total ? sh.done / total : 0.5
     const base = Math.round(a.reward * 0.5)
     const bonus = perf >= 0.85 && sh.done >= 4 ? Math.round(a.reward * 0.1) : 0
-    const pay = base + sh.earned + bonus
-    earn(d, pay, `Wages: ${a.label.replace('Work shift: ', '')}`, 'wage')
-    if (sh.tips) earn(d, sh.tips, 'Tips', 'bonus')
+    const illegal = !!(a.ctx.career && CAREERS[a.ctx.career]?.illegal)
+    const pay = Math.round((base + sh.earned + bonus) * (illegal ? 1 : respectPay(d)))
+    if (illegal) {
+      earnDirty(d, pay + sh.tips, `Cut: ${a.label.replace('Work shift: ', '')}`)
+      addRep(d, 2, -1)
+      lines.push('💸 Paid in dirty cash. Launder it before banking or big buys.')
+    } else {
+      earn(d, pay, `Wages: ${a.label.replace('Work shift: ', '')}`, 'wage')
+      if (sh.tips) earn(d, sh.tips, 'Tips', 'bonus')
+      addRep(d, 0, 1)
+    }
     lines.push(`💰 Base pay ${formatMoney(base)} + tasks ${formatMoney(sh.earned)}${bonus ? ` + star bonus ${formatMoney(bonus)}` : ''}`)
     if (sh.tips) lines.push(`🪙 Tips ${formatMoney(sh.tips)}`)
     lines.push(`📋 Tasks done ${sh.done}, missed ${sh.missed} · performance ${Math.round(perf * 100)}%`)
@@ -591,6 +661,11 @@ function finishActivity(d: GameState) {
     const label = a.kind === 'work' ? `Wages: ${a.label.replace('Work shift: ', '')}` : a.label
     earn(d, a.reward, label, a.kind === 'work' ? 'wage' : 'bonus')
     lines.push(`💰 Earned ${formatMoney(a.reward)}`)
+  }
+  const respectGain = RESPECT_ACTS[a.defId.split(':')[0]]
+  if (respectGain) {
+    addRep(d, 0, respectGain)
+    lines.push(`🤝 Respect +${respectGain}`)
   }
   for (const [k, v] of Object.entries(a.skillXp) as [SkillId, number][]) {
     addXp(d, k, v, lines)
@@ -851,7 +926,7 @@ function finishActivity(d: GameState) {
       lines.push('🔪 A client robbed you on the way out. You kept only a little.')
       tone = 'bad'
     }
-    earn(d, earned, 'Night work', 'wage')
+    earnDirty(d, earned, 'Night work')
     lines.push(`💰 Earned ${formatMoney(earned)} tonight.`)
     afterIntimacy(d, lines, 0.18)
   }
@@ -875,6 +950,7 @@ function finishActivity(d: GameState) {
     let chance = a.crime.chance - d.legal.heat / 400
     if (friendPoints(d, 'nii') >= NPC_BY_ID.nii.perk.friendAt) chance += 0.15
     if (friendPoints(d, 'boateng') >= NPC_BY_ID.boateng.perk.friendAt) chance += 0.1
+    chance += Math.min(0.2, d.rep.street / 500) // the streets know you: lookouts, fences, fewer mistakes
     if (a.ctx.street) {
       const hr = hourOf(d.minutes)
       if (hr >= 20 || hr < 5) chance += 0.1 // darkness helps
@@ -883,9 +959,11 @@ function finishActivity(d: GameState) {
     }
     if (Math.random() < chance) {
       const got = Math.round(a.crime.min + Math.random() * (a.crime.max - a.crime.min))
-      d.money += got
+      earnDirty(d, got, a.label)
+      const big = a.defId === 'streetrob' || a.defId === 'alleyrob'
+      addRep(d, big ? 6 : 3, -1)
       d.legal.heat = Math.min(100, d.legal.heat + 15)
-      lines.push(`💰 Got away with ${formatMoney(got)}. Heat is rising.`)
+      lines.push(`💰 Got away with ${formatMoney(got)} in dirty cash. Heat is rising.`)
       title = 'You got away with it'
       tone = 'neutral'
     } else {
@@ -893,17 +971,32 @@ function finishActivity(d: GameState) {
       const seen = a.ctx.street && (a.ctx.cops ?? 0) > 0
       showResult(d, 'Caught!', '🚓', [seen ? '👮 The patrol officer saw everything and tackled you.' : a.ctx.street ? '📢 They shouted “Thief!” and a police officer grabbed you.' : '👮 A police officer grabbed your arm.', '“Where do you think you are going?”'], 'bad')
       d.legal.heat = Math.min(100, d.legal.heat + 10)
+      addRep(d, 2, -8)
       d.event = { id: 'arrest_offer', ctx: { officer: rollOfficer(), ...(charge ? { offence: charge } : {}) } }
       return
     }
   }
   if (a.kind === 'custody') {
-    d.legal.caseDeadline = d.minutes + LEGAL.courtDays * 1440
-    lines.push(`⚖️ Released on bail. Attend your hearing at Accra High Court within ${LEGAL.courtDays} days, or pay the fine here.`)
-    title = 'Released from custody'
-    tone = 'neutral'
+    if (d.money >= LEGAL.bail) {
+      spend(d, LEGAL.bail, 'Police bail bond', 'fee')
+      d.legal.caseDeadline = d.minutes + LEGAL.courtDays * 1440
+      lines.push(`💸 You paid ${formatMoney(LEGAL.bail)} bail.`)
+      lines.push(`⚖️ Released on bail. Attend your hearing at Accra High Court within ${LEGAL.courtDays} days, or pay the fine here.`)
+      title = 'Released on bail'
+      tone = 'neutral'
+    } else {
+      // no bail money: held on remand in prison until the trial
+      remand(d)
+      showResult(d, 'Remanded in prison', '⛓️', [`You could not pay the ${formatMoney(LEGAL.bail)} bail.`, `You stay locked up for ${LEGAL.courtDays} days until your trial.`], 'bad')
+      return
+    }
   }
-  if (a.kind === 'jail') {
+  if (a.kind === 'jail' && a.defId === 'remand') {
+    d.legal.caseDeadline = d.minutes + 1440
+    title = 'Out of remand'
+    lines.push('⚖️ Your trial is today. Go to Accra High Court within 24 hours, or pay the fine here. Miss it and a warrant is issued.')
+    tone = 'neutral'
+  } else if (a.kind === 'jail') {
     title = 'Released from prison'
     lines.push('🔓 You served your sentence. Time for a fresh start.')
     tone = 'neutral'
@@ -961,16 +1054,19 @@ export function rollOfficer(): Officer {
 /** Remember a big life event so goals can react to it. */
 function lifeEvent(d: GameState, key: string) {
   d.lifeFlags = { ...d.lifeFlags, [key]: d.minutes }
+  if (key === 'evicted') addRep(d, 0, -8)
 }
 
 function arrest(d: GameState, charge: keyof typeof CHARGES = 'theft') {
   lifeEvent(d, 'trouble')
+  addRep(d, 3, -10)
+  seizeDirty(d, 1)
   d.legal.heat = 0
   d.legal = { ...d.legal, charge: CHARGES[charge].name, fine: CHARGES[charge].fine }
   enterPlace(d, 'police')
   d.activity = {
     uid: d.nextId++, defId: 'custody', label: 'Held in police custody', icon: '🚓', kind: 'custody', ctx: { dest: 'police' },
-    total: LEGAL.custodyMinutes, done: 0, scale: 120, needs: { fun: -15, social: -10, hygiene: -10 }, appliedFrac: 0,
+    total: LEGAL.custodyMinutes, done: 0, scale: LEGAL.custodyScale, needs: { fun: -15, social: -10, hygiene: -10 }, appliedFrac: 0,
     reward: 0, skillXp: {}, careerXp: 0, cost: 0, startedAt: d.minutes,
   }
   toast('🚓 You have been arrested!', 'bad')
@@ -980,6 +1076,7 @@ function sendToJail(d: GameState, days: number, reason: string) {
   lifeEvent(d, 'trouble')
   d.legal.caseDeadline = null
   d.legal.record++
+  addRep(d, 10, -15)
   enterPlace(d, 'police')
   d.activity = {
     uid: d.nextId++, defId: 'jail', label: `Serving ${days} days in prison`, icon: '⛓️', kind: 'jail', ctx: { dest: 'police' },
@@ -991,6 +1088,16 @@ function sendToJail(d: GameState, days: number, reason: string) {
     d.employment = null
   }
   toast(`⛓️ ${reason} Sentenced to ${days} days.`, 'bad')
+}
+
+/** Held in prison awaiting trial (could not make bail). Not a conviction. */
+function remand(d: GameState) {
+  enterPlace(d, 'police')
+  d.activity = {
+    uid: d.nextId++, defId: 'remand', label: 'On remand awaiting trial', icon: '⛓️', kind: 'jail', ctx: { dest: 'police' },
+    total: LEGAL.courtDays * 1440, done: 0, scale: LEGAL.jailScale, needs: { fun: -20, social: -15, hygiene: -15, energy: 15, hunger: 15 }, appliedFrac: 0,
+    reward: 0, skillXp: {}, careerXp: 0, cost: 0, startedAt: d.minutes,
+  }
 }
 
 function hospitalize(d: GameState, why: string) {
@@ -1518,7 +1625,8 @@ function timeEffects(d: GameState, prev: number) {
     if (skillLevel(d, 'technology') >= 1 && hr >= 9 && hr < 20) pool.push({ id: 'freelance', w: EVENTS.freelance.weight })
     if (friendPoints(d, 'yaw') >= 15 && hr >= 10 && hr < 21) pool.push({ id: 'friend_invite', w: EVENTS.friend_invite.weight })
     if (inWorld && districtAt(d.player.x, d.player.z) === 'commercial' && hr >= 8 && hr < 19) pool.push({ id: 'market_sale', w: EVENTS.market_sale.weight })
-    if (inWorld && (hr >= 20 || hr < 5) && d.money >= 60) pool.push({ id: 'mugged', w: 9 })
+    // known on the streets: small-time robbers leave you alone
+    if (inWorld && (hr >= 20 || hr < 5) && d.money >= 60 && d.rep.street < 50) pool.push({ id: 'mugged', w: 9 })
     // known to the police: patrols stop and search you
     if (inWorld && d.legal.heat >= 25) pool.push({ id: 'police_stop', w: Math.round(d.legal.heat / 8) })
     if (d.view === 'home' && hr >= 18 && hr < 23 && !(d.upgrades[d.housing.tier] ?? []).includes('generator')) pool.push({ id: 'dumsor', w: 3 })
@@ -1679,6 +1787,9 @@ export const useGame = create<GameState>((set, get) => ({
     d.activity = makeActivity(d, def, ctx, r)
     cancelPath()
     set(d)
+    // fold the place/home sheet away so the player can watch the activity (tap the place or Home to reopen)
+    const ui = useUI.getState()
+    if (ui.panel === 'building' || ui.panel === 'home') useUI.setState({ panel: 'none', selectedFurniture: null })
     return { ok: true }
   },
 
@@ -1704,7 +1815,9 @@ export const useGame = create<GameState>((set, get) => ({
     if (s.nearDest !== 'realty') return toast('Buy businesses in person at Accra Realty', 'warn')
     if (s.money < b.price) return toast(`Need ${formatMoney(b.price - s.money)} more for the ${b.name}`, 'warn')
     const d = draft(s)
-    spend(d, b.price, `Bought business: ${b.name}`, 'purchase')
+    const dirtyMsg = needClean(d, b.price)
+    if (dirtyMsg) return toast(dirtyMsg, 'warn')
+    spend(d, b.price, `Bought business: ${b.name}`, 'purchase', true)
     d.businesses = { ...d.businesses, [id]: { level: 1, paid: b.price, since: d.minutes, lastProfit: 0 } }
     toast(`${b.emoji} You now own the ${b.name}! Profit lands in your wallet every morning.`, 'good')
     set(d)
@@ -1718,7 +1831,9 @@ export const useGame = create<GameState>((set, get) => ({
     const cost = Math.round(b.price * BIZ.upgradeCost)
     if (s.money < cost) return toast(`Need ${formatMoney(cost - s.money)} more to upgrade`, 'warn')
     const d = draft(s)
-    spend(d, cost, `Upgrade: ${b.name}`, 'purchase')
+    const dirtyMsg = needClean(d, cost)
+    if (dirtyMsg) return toast(dirtyMsg, 'warn')
+    spend(d, cost, `Upgrade: ${b.name}`, 'purchase', true)
     d.businesses = { ...d.businesses, [id]: { ...own, level: own.level + 1, paid: own.paid + cost } }
     toast(`${b.emoji} ${b.name} upgraded to level ${own.level + 1}. More customers!`, 'good')
     set(d)
@@ -1752,6 +1867,57 @@ export const useGame = create<GameState>((set, get) => ({
 
   dismissResult: () => set({ result: null }),
 
+  launder: (method, amount, bizId) => {
+    const s = get()
+    const busy = busyReason(s)
+    if (busy) return toast(busy, 'warn')
+    amount = Math.floor(Math.min(amount, s.dirty))
+    if (amount <= 0) return toast('You have no dirty cash to launder', 'info')
+    const d = draft(s)
+    const day = dayOf(d.minutes)
+    if (method === 'business') {
+      const b = bizId ? BUSINESS_BY_ID[bizId] : undefined
+      const own = bizId ? d.businesses[bizId] : undefined
+      if (!b || !own) return toast('You need to own that business', 'warn')
+      const cap = launderCap(d, bizId!)
+      if (cap <= 0) return toast(`The ${b.name} till cannot take any more today. Try tomorrow.`, 'warn')
+      amount = Math.min(amount, cap)
+      const fee = Math.round(amount * LAUNDER.business.fee)
+      spend(d, fee, `Laundering costs: ${b.name}`, 'fee')
+      d.dirty = Math.max(0, d.dirty - amount + fee)
+      d.dirty = Math.min(d.dirty, d.money)
+      const prev = d.laundered[bizId!]
+      d.laundered = { ...d.laundered, [bizId!]: { day, amount: (prev?.day === day ? prev.amount : 0) + amount } }
+      if (Math.random() < LAUNDER.business.auditChance) {
+        const fine = Math.round(amount * LAUNDER.business.auditFine)
+        spend(d, Math.min(fine, d.money), `GRA tax audit: ${b.name}`, 'fee')
+        d.legal.heat = Math.min(100, d.legal.heat + 10)
+        addRep(d, 0, -5)
+        showResult(d, 'Tax audit!', '🧾', [`The Ghana Revenue Authority questioned the ${b.name} books.`, `💸 Fined ${formatMoney(fine)}. People are talking.`], 'bad')
+      } else toast(`🧼 ${formatMoney(amount - fee)} now clean, booked as ${b.name} sales (fee ${formatMoney(fee)}).`, 'good')
+    } else {
+      const here = d.view === 'inside' ? d.insideDest : d.nearDest
+      if (here !== LAUNDER.forex.dest) return toast('The forex boys work at Makola Market. Go there.', 'warn')
+      amount = Math.min(amount, LAUNDER.forex.max)
+      if (Math.random() < LAUNDER.forex.stingChance + d.legal.heat / 500) {
+        // undercover sting: the cash is taken and you are arrested
+        d.money -= amount
+        d.dirty -= amount
+        pushTx(d, 'Seized in a police sting', -amount, 'fee')
+        showResult(d, 'Police sting!', '🚨', ['The “forex boy” was an undercover officer.', `👮 ${formatMoney(amount)} seized as evidence.`], 'bad')
+        d.event = { id: 'arrest_offer', ctx: { officer: rollOfficer(), offence: 'laundering' } }
+      } else {
+        const rate = d.rep.street >= 40 ? LAUNDER.forex.streetFee : LAUNDER.forex.fee
+        const fee = Math.round(amount * rate)
+        spend(d, fee, 'Forex boys commission', 'fee')
+        d.dirty = Math.max(0, Math.min(d.dirty - amount + fee, d.money))
+        d.legal.heat = Math.min(100, d.legal.heat + 5)
+        toast(`💱 Swapped through the forex boys: ${formatMoney(amount - fee)} clean (commission ${formatMoney(fee)}).`, 'good')
+      }
+    }
+    set(d)
+  },
+
   applyForJob: (career) => {
     const s = get()
     const c = CAREERS[career]
@@ -1763,6 +1929,10 @@ export const useGame = create<GameState>((set, get) => ({
     const levelIdx = (prog?.level ?? 1) - 1
     const missing = missingRequirements(s, career, levelIdx)
     if (missing.length) return toast(`Not eligible yet: needs ${missing.join(', ')}`, 'warn')
+    const needStreet = STREET_REQ[career] ?? 0
+    if (s.rep.street < needStreet) return toast(`🕶️ They do not trust you yet. Needs street cred ${needStreet} (you have ${Math.round(s.rep.street)}).`, 'warn')
+    const needRespect = RESPECT_REQ[career] ?? 0
+    if (s.rep.respect < needRespect) return toast(`📋 Failed the background check. Needs respect ${needRespect} (you have ${Math.round(s.rep.respect)}). Church, volunteering and honest work help.`, 'warn')
     const d = draft(s)
     d.careers[career] = prog ?? { level: 1, xp: 0, shifts: 0 }
     d.employment = career
@@ -1805,6 +1975,12 @@ export const useGame = create<GameState>((set, get) => ({
     d.event = null
     const eff = choice.effect
     const lines = [eff.text, ...applyEffect(d, eff)]
+    // stopped by police with a fat wad of unexplained cash
+    if ((s.event.id === 'police_stop' || s.event.id === 'checkpoint') && d.dirty >= 300 && Math.random() < 0.4) {
+      lines.push('🔦 The officer pats you down and finds the cash.')
+      seizeDirty(d, 0.5, lines)
+      d.legal.heat = Math.min(100, d.legal.heat + 10)
+    }
     if (eff.custom) {
       const fit = levelFromXp(d.skills.fitness)
       if (eff.custom === 'tenant_cash' || eff.custom === 'tenant_court' || eff.custom === 'tenant_stay') {
@@ -1882,7 +2058,7 @@ export const useGame = create<GameState>((set, get) => ({
         const odds = OFFICERS[off].accept + (friendPoints(d, 'boateng') >= NPC_BY_ID.boateng.perk.friendAt && off !== 'honest' ? 0.1 : 0)
         if (d.money < cost) {
           lines.push('You fumble for money you do not have. The officer is not amused.')
-          if (eff.custom === 'arrest_bribe') arrest(d, ctx.offence === 'soliciting' ? 'soliciting' : ctx.offence === 'robbery' ? 'robbery' : 'theft')
+          if (eff.custom === 'arrest_bribe') arrest(d, ctx.offence && ctx.offence in CHARGES ? (ctx.offence as keyof typeof CHARGES) : 'theft')
           else { spend(d, Math.min(d.money, 100), 'Traffic fine', 'fee'); lines.push('🧾 Fined instead.') }
         } else if (Math.random() < odds) {
           spend(d, cost, '“Something for the boys”', 'fee')
@@ -1894,7 +2070,7 @@ export const useGame = create<GameState>((set, get) => ({
           d.legal.heat = Math.min(100, d.legal.heat + 20)
         }
       } else if (eff.custom === 'arrest_quiet') {
-        arrest(d, ctx.offence === 'soliciting' ? 'soliciting' : ctx.offence === 'licence' ? 'licence' : ctx.offence === 'robbery' ? 'robbery' : 'theft')
+        arrest(d, ctx.offence && ctx.offence in CHARGES ? (ctx.offence as keyof typeof CHARGES) : 'theft')
       } else if ((eff.custom === 'hook_home' || eff.custom === 'hook_guest') && d.hookup) {
         const home = eff.custom === 'hook_home'
         if (home) {
@@ -2043,7 +2219,9 @@ export const useGame = create<GameState>((set, get) => ({
     const price = Math.round(def.price * priceMultiplier(s, 'market')) + (delivered ? 20 : 0)
     if (s.money < price) return toast(`Need ${formatMoney(price - s.money)} more for the ${def.name}`, 'warn')
     const d = draft(s)
-    spend(d, price, `Bought ${def.name}`, 'purchase')
+    const dirtyMsg = needClean(d, price)
+    if (dirtyMsg) return toast(dirtyMsg, 'warn')
+    spend(d, price, `Bought ${def.name}`, 'purchase', true)
     const uid = d.nextId++
     d.inventory = [...d.inventory, { uid, type, placed: null }]
     if (hold) {
@@ -2118,6 +2296,7 @@ export const useGame = create<GameState>((set, get) => ({
     }
     const total = (owned ? 0 : home.rent) + BALANCE.movingFee
     if (s.money < total) return toast(`Need ${formatMoney(total - s.money)} more to move`, 'warn')
+    if (!owned && (tier === 'apartment' || tier === 'premium') && s.rep.respect < 15) return toast('🏢 The letting agent checked your references and said no. Build some respect first.', 'warn')
     const d = draft(s)
     if (!owned) spend(d, home.rent, `Rent (first week): ${home.name}`, 'rent')
     spend(d, BALANCE.movingFee, 'Moving fee', 'fee')
@@ -2454,7 +2633,10 @@ export const useGame = create<GameState>((set, get) => ({
     const d = draft(s)
     if (dir === 'in') {
       if (d.money < amount) return toast('Not enough cash in your wallet', 'warn')
+      // the teller asks about large unexplained cash: only clean money goes in
+      if (cleanCash(d) < amount) return toast(`🏦 The bank only accepts clean cash. You have ${formatMoney(cleanCash(d))} clean and ${formatMoney(d.dirty)} dirty. Launder it first.`, 'warn')
       d.money -= amount
+      d.dirty = Math.min(d.dirty, d.money)
       d.bank.balance = Math.round((d.bank.balance + amount) * 100) / 100
       pushTx(d, 'Deposit to bank', -amount, 'transfer')
       track(d, 'save', amount)
@@ -2506,7 +2688,9 @@ export const useGame = create<GameState>((set, get) => ({
     const price = plotValue(s, plotId)
     if (s.money < price) return toast(`Need ${formatMoney(price - s.money)} more for this land`, 'warn')
     const d = draft(s)
-    spend(d, price, `Land: ${DEST_BY_ID[plotId].name}`, 'purchase')
+    const dirtyMsg = needClean(d, price)
+    if (dirtyMsg) return toast(dirtyMsg, 'warn')
+    spend(d, price, `Land: ${DEST_BY_ID[plotId].name}`, 'purchase', true)
     const guards = Math.random() < def.guardRisk ? 'active' : 'none'
     d.plots[plotId] = { owned: true, boughtFor: price, permit: 'none', permitReady: null, noPermit: false, stage: 0, until: null, guards, project: null }
     showResult(d, 'You own land!', '🗺️', [`${DEST_BY_ID[plotId].name} is yours for ${formatMoney(price)}.`, 'Choose a project on the plot (house, villa, guesthouse, flats or shops), get a permit at the Lands Commission, then build.', ...(guards === 'active' ? ['⚠️ Rumour says land guards claim this plot…'] : [])], 'good')
@@ -2548,7 +2732,9 @@ export const useGame = create<GameState>((set, get) => ({
     if (p.permit !== 'approved' && !withoutPermit) return toast('You need a building permit from the Lands Commission', 'warn')
     if (s.money < stage.price) return toast(`Need ${formatMoney(stage.price - s.money)} more for ${stage.name.toLowerCase()}`, 'warn')
     const d = draft(s)
-    spend(d, stage.price, `Construction: ${stage.name}`, 'purchase')
+    const dirtyMsg = needClean(d, stage.price)
+    if (dirtyMsg) return toast(dirtyMsg, 'warn')
+    spend(d, stage.price, `Construction: ${stage.name}`, 'purchase', true)
     d.plots[plotId] = { ...p, until: d.minutes + stage.days * 1440, noPermit: p.noPermit || (withoutPermit && p.permit !== 'approved') }
     toast(`${stage.emoji} Builders started the ${stage.name.toLowerCase()}. Ready in ${stage.days} day.`, 'good')
     set(d)
@@ -2561,7 +2747,9 @@ export const useGame = create<GameState>((set, get) => ({
     if (s.nearDest !== 'dealer') return toast('Visit Spintex Motors to buy vehicles', 'warn')
     if (s.money < def.price) return toast(`Need ${formatMoney(def.price - s.money)} more`, 'warn')
     const d = draft(s)
-    spend(d, def.price, `Bought: ${def.name}`, 'purchase')
+    const dirtyMsg = needClean(d, def.price)
+    if (dirtyMsg) return toast(dirtyMsg, 'warn')
+    spend(d, def.price, `Bought: ${def.name}`, 'purchase', true)
     d.vehicles = [...d.vehicles, v]
     showResult(d, `You own a ${def.name.toLowerCase()}!`, def.emoji, [`Start a ${def.job.toLowerCase()} shift from the Drive app on your phone.`, 'No more daily rental fees.'], 'good')
     set(d)
@@ -2659,7 +2847,9 @@ export const useGame = create<GameState>((set, get) => ({
     if (s.nearDest !== 'realty') return toast('Visit Accra Realty to buy property', 'warn')
     if (s.money < h.buy) return toast(`Need ${formatMoney(h.buy - s.money)} more`, 'warn')
     const d = draft(s)
-    spend(d, h.buy, `Bought: ${h.name}`, 'purchase')
+    const dirtyMsg = needClean(d, h.buy)
+    if (dirtyMsg) return toast(dirtyMsg, 'warn')
+    spend(d, h.buy, `Bought: ${h.name}`, 'purchase', true)
     d.owned = [...d.owned, tier]
     showResult(d, `You bought the ${h.name}!`, '🏡', ['No more rent for this home.', d.housing.tier === tier ? 'You already live here.' : 'Move in from the Home tab.'], 'good')
     set(d)
@@ -2757,7 +2947,9 @@ export const useGame = create<GameState>((set, get) => ({
     }
     if (s.money < u.price) return toast(`Need ${formatMoney(u.price - s.money)} more`, 'warn')
     const d = draft(s)
-    spend(d, u.price, `Upgrade: ${u.name}`, 'purchase')
+    const dirtyMsg = needClean(d, u.price)
+    if (dirtyMsg) return toast(dirtyMsg, 'warn')
+    spend(d, u.price, `Upgrade: ${u.name}`, 'purchase', true)
     d.upgrades = { ...d.upgrades, [d.housing.tier]: [...have, id] }
     toast(`${u.emoji} ${u.name} installed!`, 'good')
     set(d)

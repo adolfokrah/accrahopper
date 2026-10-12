@@ -4336,3 +4336,55 @@ button.ios-row:active {
   color: #fff;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
 }
+
+/* dirty money & reputation */
+.pc-split {
+  display: block;
+  font-size: 0.72rem;
+  opacity: 0.85;
+}
+.dirtychip {
+  background: #2a1f1f;
+  color: #ffb4a8;
+  font-weight: 800;
+}
+.rep-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rep-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rep-row > span {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+/* MoMo app icon: wordmark instead of an emoji */
+.momo-glyph {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+.momo-glyph b {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-weight: 900;
+  font-size: 17px;
+  letter-spacing: -0.04em;
+  color: #0b2c5c;
+  line-height: 1;
+}
+.momo-glyph i {
+  position: absolute;
+  top: 18%;
+  right: 16%;
+  font-style: normal;
+  font-size: 7px;
+  color: #0b2c5c;
+}

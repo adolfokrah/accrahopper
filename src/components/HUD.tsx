@@ -24,6 +24,7 @@ import { CourtModal, StatusChips, TaskList, TravelSheet } from './LifeUI'
 function TopBar() {
   const profile = useGame((s) => s.profile)
   const money = useGame((s) => s.money)
+  const dirty = useGame((s) => s.dirty)
   const minutes = useGame((s) => s.minutes)
   const housing = useGame((s) => s.housing)
   const paused = useUI((s) => s.paused)
@@ -59,6 +60,11 @@ function TopBar() {
         {rentChip && (
           <button className={`card pill rentchip ${housing.homeless || housing.overdueSince !== null || money < rent ? 'bad' : ''}`} onClick={() => { if (housing.homeless) return useUI.getState().setPanel('home'); useUI.setState({ phoneTab: 'wallet' }); useUI.getState().setPanel('phone') }}>
             {housing.homeless ? '🧳' : '🏠'} {rentChip}
+          </button>
+        )}
+        {dirty > 0 && (
+          <button className="card pill dirtychip" title="Dirty cash: launder it in Phone → Wallet" onClick={() => { useUI.setState({ phoneTab: 'wallet' }); useUI.getState().setPanel('phone') }}>
+            💸 {formatMoney(dirty)} dirty
           </button>
         )}
         <button className="card pill money" onClick={() => { useUI.setState({ phoneTab: 'wallet' }); useUI.getState().setPanel('phone') }} aria-label="Wallet">

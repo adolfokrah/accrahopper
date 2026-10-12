@@ -3,7 +3,7 @@ import { dayOf, formatMoney } from '@/game/config'
 import { ACCESSORIES, FURNITURE, HAIRSTYLES, HAIR_COLORS, OUTFITS, OUTFIT_COLORS, SKIN_TONES, TRAITS } from '@/game/content'
 import { useGame } from '@/game/store'
 import { useUI } from '@/game/ui'
-import { Chip, Sheet } from './kit'
+import { Chip, Sheet, Meter } from './kit'
 import { AvatarPreview } from './AvatarPreview'
 
 export function Swatches({ colors, value, onChange, label }: { colors: string[]; value: number; onChange: (i: number) => void; label: string }) {
@@ -48,6 +48,19 @@ export function CharacterPanel() {
       <label className="lbl">Outfit</label><Pills items={OUTFITS.map((o) => o.name)} value={a.outfit} onChange={(outfit) => set({ outfit })} label="Outfit" />
       <label className="lbl">Outfit colour</label><Swatches colors={OUTFIT_COLORS} value={a.outfitColor} onChange={(outfitColor) => set({ outfitColor })} label="Outfit colour" />
       <label className="lbl">Accessory</label><Pills items={ACCESSORIES} value={a.accessory} onChange={(accessory) => set({ accessory })} label="Accessory" />
+      <b>Reputation</b>
+      <div className="rep-grid">
+        <div className="rep-row">
+          <span>🕶️ Street cred <b>{Math.round(s.rep.street)}</b></span>
+          <Meter value={s.rep.street} tone="red" label="Street cred" />
+          <small className="muted">{s.rep.street >= 50 ? 'Feared: small-time robbers leave you alone. ' : ''}Better odds on every crime (+{Math.round(Math.min(20, s.rep.street / 5))}%){s.rep.street >= 40 ? ', cheaper forex boys' : ''}. Sakawa needs 15, smuggling 30.</small>
+        </div>
+        <div className="rep-row">
+          <span>🤝 Respect <b>{Math.round(s.rep.respect)}</b></span>
+          <Meter value={s.rep.respect} tone="green" label="Respect" />
+          <small className="muted">Honest wages ×{(0.9 + s.rep.respect / 500).toFixed(2)}. Banks, schools and hospitals check it before hiring; letting agents want 15+. Church, volunteering and honest work raise it; crime, arrests and evictions lower it.</small>
+        </div>
+      </div>
       <b>Life so far</b>
       <div className="chips">
         <Chip>🍛 {s.stats.mealsEaten} meals</Chip>
