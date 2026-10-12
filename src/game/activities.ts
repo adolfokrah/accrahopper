@@ -15,6 +15,9 @@ import {
   FURNITURE,
   FURNITURE_ACTIVITIES,
   STREET_CRIMES,
+  PERMIT,
+  PET_ACTIVITIES,
+  PETS,
   HANGOUT,
   HOMES,
   NPCS,
@@ -217,6 +220,8 @@ function specialReason(req: string, s: GameState): string | undefined {
     case 'notEnrolled': return s.edu.program ? `Already enrolled in ${PROGRAMS[s.edu.program].name}` : undefined
     case 'enrolled': return s.edu.program ? undefined : 'Enrol in a programme first'
     case 'sunday': return isSunday(day) ? undefined : `Sundays only. Today is ${weekday(day)}`
+    case 'pet': return s.pet ? undefined : 'You have no pet. Buy one at Makola Market'
+    case 'petwalk': return !s.pet ? 'You have no pet' : PETS[s.pet.type].walk ? undefined : `${PETS[s.pet.type].name}s do not go for walks`
     case 'engaged': return s.romance.stage === 'engaged' ? undefined : 'You need to be engaged first'
     case 'needRing': return s.romance.ring ? 'You already have a ring' : s.romance.stage !== 'dating' ? 'You need a partner to propose to' : undefined
     case 'noBank': return s.bank.open ? 'You already have an account' : undefined
@@ -275,7 +280,16 @@ export function activitiesForDest(s: GameState, destId: string): Resolved[] {
     if (w) out.push(resolve(w, { dest: destId, career: s.employment }, s))
   }
   const mature = useUI.getState().settings.mature
-  for (const def of destActs(destId)) if (def.require !== 'mature' || mature) out.push(resolve(def, ctx, s))
+  // building permits are filed per plot: one line for each plot still waiting
+  const waiting = Object.keys(s.plots).filter((k) => s.plots[k].owned && s.plots[k].permit === 'none')
+  for (const def of destActs(destId)) {
+    if (def.require === 'mature' && !mature) continue
+    if ((def.effect === 'permit' || def.effect === 'permitbribe') && waiting.length) {
+      for (const pid of waiting) out.push(resolve(permitDef(def, pid), { dest: destId, plot: pid }, s))
+      continue
+    }
+    out.push(resolve(def, ctx, s))
+  }
   const partner = s.romance.partner
   if (partner && ['lounge', 'beach', 'mall', 'park', 'hotel', 'zoo', 'square'].includes(dest.kind)) {
     out.push(resolve({ ...DATE_ACT, id: `date:${partner}`, label: `Date with ${NPC_BY_ID[partner].name}`, hours: dest.hours[0] === 0 ? undefined : dest.hours }, { dest: destId, npc: partner }, s))
@@ -294,7 +308,17 @@ export function activitiesForFurniture(s: GameState, id: number): Resolved[] {
 }
 
 /** Find an activity definition from its id and context (used when starting). */
+/** A permit action for one particular plot. */
+function permitDef(def: ActivityDef, plotId: string): ActivityDef {
+  return { ...def, id: `${def.id}:${plotId}`, label: `${def.label}: ${DEST_BY_ID[plotId]?.name ?? 'your land'}`, blurb: def.effect === 'permit' ? `For ${DEST_BY_ID[plotId]?.name}. Ready in ${PERMIT.days} days.` : def.blurb, require: undefined }
+}
+
 export function findDef(s: GameState, defId: string, ctx: ActivityContext): ActivityDef | null {
+  if (ctx.plot && ctx.dest && /^permit(bribe)?:/.test(defId)) {
+    const base = destActs(ctx.dest).find((d) => d.id === defId.split(':')[0])
+    const p = s.plots[ctx.plot]
+    return base && p?.owned && p.permit === 'none' ? permitDef(base, ctx.plot) : null
+  }
   if (defId.startsWith('work:')) return workDef(s, defId.slice(5) as CareerId)
   if (defId.startsWith('travel:')) return ctx.dest ? travelDef(ctx.dest, defId.slice(7)) : null
   if (defId.startsWith('date:')) {
@@ -306,6 +330,7 @@ export function findDef(s: GameState, defId: string, ctx: ActivityContext): Acti
     return npc ? { ...HANGOUT, id: defId, label: `Hang out with ${npc.name}` } : null
   }
   if (ctx.street) return STREET_CRIMES.find((d) => d.id === defId) ?? null
+  if (ctx.pet) return PET_ACTIVITIES.find((d) => d.id === defId) ?? null
   if (ctx.dest) return destActs(ctx.dest).find((d) => d.id === defId) ?? null
   if (ctx.furnitureUid !== undefined) {
     const type = furnitureTypeOf(s, ctx.furnitureUid)

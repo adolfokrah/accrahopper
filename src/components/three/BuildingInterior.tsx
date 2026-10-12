@@ -45,7 +45,7 @@ interface Layout {
   wander?: { x: number; z: number }[]
 }
 
-const look = (i: number): Appearance => ({ skin: (i * 3 + 1) % 8, hair: (i * 5 + 2) % 11, hairColor: i % 4, outfit: (i * 7) % 8, outfitColor: (i * 3 + 2) % 10, accessory: i % 3 === 0 ? (i % 11) : 0, body: i % 3, beard: i % 4 === 1 ? (i % 3) + 1 : 0 })
+const look = (i: number): Appearance => ({ skin: (i * 3 + 1) % 8, hair: (i * 5 + 2) % 11, hairColor: i % 4, outfit: (i * 7) % 8, outfitColor: (i * 3 + 2) % 10, accessory: i % 3 === 0 ? (i % 11) : 0, body: i % 3, sex: i % 2, beard: i % 2 === 0 && i % 4 === 2 ? (i % 3) + 1 : 0 })
 
 /* ---------------------------- small props ---------------------------- */
 function Stool({ x, z }: { x: number; z: number }) {

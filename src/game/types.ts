@@ -96,6 +96,20 @@ export interface Appearance {
   body?: number
   /** Facial hair: none, stubble, goatee, full beard. */
   beard?: number
+  /** Body: 0 male, 1 female (older saves: male). */
+  sex?: number
+}
+export type Pronouns = 'he' | 'she' | 'they'
+export type PetType = 'dog' | 'guard' | 'cat' | 'parrot'
+export interface Pet {
+  type: PetType
+  name: string
+  /** 0–100 each: food, happiness, cleanliness, health. */
+  hunger: number
+  happy: number
+  clean: number
+  health: number
+  since: number
 }
 
 /** How you started life in Accra. */
@@ -106,6 +120,10 @@ export interface Profile {
   traits: [TraitId, TraitId]
   /** Older saves have none: treated as working class. */
   lifestyle?: Lifestyle
+  /** How the game refers to your character (older saves: they). */
+  pronouns?: Pronouns
+  /** Dream in life picked at the start (AMBITIONS id). */
+  dream?: string
 }
 
 export type TxCategory =
@@ -189,6 +207,10 @@ export interface ActivityContext {
   street?: boolean
   /** Police officers on patrol close by when the crime started. */
   cops?: number
+  /** Caring for your pet. */
+  pet?: boolean
+  /** The plot of land an action is for (building permits). */
+  plot?: string
 }
 
 export interface ActiveActivity {
@@ -278,6 +300,8 @@ export interface Stats {
   moneySpent: number
   tripsTaken: number
   conversations: number
+  /** Dirty cash turned clean, in total. */
+  laundered?: number
 }
 
 /** Police personality: decides whether a bribe works. */

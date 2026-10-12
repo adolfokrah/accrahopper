@@ -426,6 +426,7 @@ function Npcs() {
 }
 
 import { ParkedCars, RideCam, RideVehicle, rideView } from './Vehicles'
+import { PetFollower } from './PetFollower'
 
 function ClickMarker() {
   const ref = useRef<THREE.Mesh>(null)
@@ -529,6 +530,7 @@ function WorldContent() {
         <Player />
         <RideVehicle />
         <ParkedCars />
+        <WorldPet />
         <RideCam />
         <ClickMarker />
         <GroundPicker />
@@ -537,6 +539,12 @@ function WorldContent() {
       <BuildingInterior visible={view === 'inside'} />
     </>
   )
+}
+
+/** Your pet walks with you around the city (it waits out rides). */
+function WorldPet() {
+  const riding = useGame((s) => s.activity?.kind === 'travel' && !!s.activity.ctx.ride)
+  return <PetFollower hidden={riding} getTarget={() => ({ x: runtime.player.x, z: runtime.player.z, rot: runtime.player.rot, moving: runtime.player.moving })} />
 }
 
 /** Canvas rebuilds after a lost GPU context; reset once a canvas runs stably. */

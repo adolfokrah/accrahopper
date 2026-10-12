@@ -119,6 +119,8 @@ interface UIState {
   /** Ride camera: inside the vehicle or chasing it. */
   rideCam: 'inside' | 'chase'
   holdRot: 0 | 1
+  /** Furniture just bought: highlighted in storage with placing tips. */
+  newItem: number | null
   selectedFurniture: number | null
   /** Pedestrian picked as a robbery target (index into the ambient crowd). */
   robTarget: number | null
@@ -177,6 +179,7 @@ export const useUI = create<UIState>((set, get) => ({
   needsOpen: false,
   rideCam: 'inside',
   holdRot: 0,
+  newItem: null,
   selectedFurniture: null,
   trackedDest: null,
   helpSeen: false,

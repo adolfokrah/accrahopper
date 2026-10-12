@@ -7,6 +7,7 @@ import type {
   HomeTier,
   Lifestyle,
   Needs,
+  PetType,
   SkillId,
   TraitId,
 } from './types'
@@ -18,6 +19,8 @@ export const SKIN_TONES = ['#f3cfa6', '#e2b183', '#c68a56', '#8d5a34', '#6a4026'
 export const HAIRSTYLES = ['Short crop', 'Afro', 'Braids', 'Bald', 'Top bun', 'Headwrap', 'Dreadlocks', 'Cornrows', 'High puff', 'Twists', 'Low fade']
 export const HAIR_COLORS = ['#1c1a1a', '#3a2418', '#7a4a22', '#c9892f', '#b83a3a', '#6a3aa0', '#d9d4c8']
 export const BODY_TYPES = ['Slim', 'Average', 'Broad']
+export const SEXES = ['Male', 'Female']
+export const PRONOUNS: { id: 'he' | 'she' | 'they'; label: string }[] = [{ id: 'he', label: 'He/him' }, { id: 'she', label: 'She/her' }, { id: 'they', label: 'They/them' }]
 export const BEARDS = ['None', 'Stubble', 'Goatee', 'Full beard']
 export interface OutfitDef {
   name: string
@@ -39,11 +42,13 @@ export const ACCESSORIES = ['None', 'Glasses', 'Cap', 'Gold chain', 'Backpack', 
 /** A random look for passers-by and staff. */
 export function randomAppearance(r: () => number = Math.random): Appearance {
   const pick = (n: number) => Math.floor(r() * n)
-  return {
+  const out: Appearance = {
     skin: pick(SKIN_TONES.length), hair: pick(HAIRSTYLES.length), hairColor: r() < 0.8 ? pick(3) : pick(HAIR_COLORS.length),
     outfit: pick(OUTFITS.length), outfitColor: pick(OUTFIT_COLORS.length), accessory: r() < 0.6 ? 0 : pick(ACCESSORIES.length),
-    body: pick(BODY_TYPES.length), beard: r() < 0.6 ? 0 : pick(BEARDS.length),
+    body: pick(BODY_TYPES.length), beard: 0, sex: r() < 0.5 ? 1 : 0,
   }
+  if (!out.sex && r() > 0.6) out.beard = pick(BEARDS.length)
+  return out
 }
 
 export const DEFAULT_APPEARANCE: Appearance = {
@@ -1379,6 +1384,26 @@ export const STREET_CHARGE = { snatch: 'theft', phonesnatch: 'theft', streetrob:
 /** Each patrol officer within this many tiles cuts your odds. */
 export const COP_RANGE = 12
 
+/* ------------------------------ pets ------------------------------ */
+export const PETS: Record<PetType, { name: string; emoji: string; price: number; blurb: string; walk: boolean; perk: string }> = {
+  dog: { name: 'Local dog', emoji: '🐕', price: 300, walk: true, blurb: 'Loyal, street-smart and always happy to see you.', perk: 'Greets you every morning.' },
+  guard: { name: 'German Shepherd', emoji: '🐕‍🦺', price: 3500, walk: true, blurb: 'Big, proud and protective. Needs walks and good food.', perk: 'Night robbers think twice when it is happy.' },
+  cat: { name: 'Cat', emoji: '🐈', price: 200, walk: false, blurb: 'Independent and cuddly. Keeps the rats away.', perk: 'Low maintenance: gets hungry slower.' },
+  parrot: { name: 'African grey parrot', emoji: '🦜', price: 1800, walk: false, blurb: 'Talks back and learns your phrases. Clever and needy.', perk: 'Chatty company: extra social every morning.' },
+}
+export const PET_TYPES = Object.keys(PETS) as PetType[]
+export const PET_NAMES = ['Bingo', 'Simba', 'Tiger', 'Lucky', 'Kofi', 'Ama', 'Bobby', 'Princess', 'Rocky', 'Sugar', 'Jollof', 'Kelewele']
+/** Pet needs lost per game hour. */
+export const PET_DECAY = { hunger: 2.8, happy: 2.1, clean: 1.4 }
+/** Looking after your pet, from anywhere (walks are for dogs). */
+export const PET_ACTIVITIES: ActivityDef[] = [
+  A({ id: 'petfeed', label: 'Feed your pet', blurb: 'A full bowl and fresh water.', icon: '🍖', kind: 'generic', minutes: 10, cost: 10, needs: { fun: 2 }, effect: 'pet_feed', require: 'pet' }),
+  A({ id: 'petplay', label: 'Play together', blurb: 'Fetch, tug-of-war or chatter. Good for you both.', icon: '🎾', kind: 'generic', minutes: 30, needs: { fun: 14, social: 4 }, effect: 'pet_play', require: 'pet' }),
+  A({ id: 'petwalk', label: 'Walk the dog', blurb: 'Around the block. Exercise and fresh air.', icon: '🦮', kind: 'generic', minutes: 40, needs: { fun: 8, social: 6, energy: -6 }, skillXp: { fitness: 6 }, effect: 'pet_walk', require: 'petwalk' }),
+  A({ id: 'petgroom', label: 'Bath and groom', blurb: 'Shampoo, brush and nails.', icon: '🛁', kind: 'generic', minutes: 25, cost: 15, needs: { hygiene: -4 }, effect: 'pet_groom', require: 'pet' }),
+  A({ id: 'petvet', label: 'Vet check-up', blurb: 'Jabs, deworming and a once-over.', icon: '🩺', kind: 'generic', minutes: 60, cost: 80, effect: 'pet_vet', require: 'pet' }),
+]
+
 export const FURNITURE_ACTIVITIES: Partial<Record<FurnitureType, ActivityDef[]>> = {
   bed_basic: [], // filled below for all beds
   toilet: [
@@ -1472,7 +1497,7 @@ export interface NpcDef {
 export const NPCS: NpcDef[] = [
   {
     id: 'akosua', name: 'Auntie Akosua', role: 'Landlady', personality: 'Warm but firm about rent day.', emoji: '👵', destId: 'home_room',
-    appearance: { skin: 4, hair: 5, hairColor: 0, outfit: 2, outfitColor: 3, accessory: 3 },
+    appearance: { skin: 4, hair: 5, hairColor: 0, outfit: 2, outfitColor: 3, accessory: 3, sex: 1 },
     perk: { friendAt: 40, text: 'Late-rent fee waived once you are friends.' },
     topics: [
       { id: 'rent', prompt: '“Rent is the heartbeat of the house, my dear. Are you saving small small?”', choices: [
@@ -1502,7 +1527,7 @@ export const NPCS: NpcDef[] = [
   },
   {
     id: 'abena', name: 'Auntie Abena', role: 'Market queen', personality: 'Sharp, funny, loves a bargain.', emoji: '👩🏾‍🦱', destId: 'market',
-    appearance: { skin: 3, hair: 2, hairColor: 1, outfit: 2, outfitColor: 0, accessory: 3 },
+    appearance: { skin: 3, hair: 2, hairColor: 1, outfit: 2, outfitColor: 0, accessory: 3, sex: 1 },
     perk: { friendAt: 40, text: '10% off everything at Makola Market.', destId: 'market', discount: 0.1 },
     topics: [
       { id: 'bargain', prompt: '“Ah, my customer! I will do you a special price.”', choices: [
@@ -1532,7 +1557,7 @@ export const NPCS: NpcDef[] = [
   },
   {
     id: 'mensah', name: 'Mrs. Mensah', role: 'Instructor', personality: 'Patient, encouraging and curious.', emoji: '👩🏾‍🏫', destId: 'training',
-    appearance: { skin: 4, hair: 4, hairColor: 0, outfit: 1, outfitColor: 4, accessory: 1 },
+    appearance: { skin: 4, hair: 4, hairColor: 0, outfit: 1, outfitColor: 4, accessory: 1, sex: 1 },
     perk: { friendAt: 40, text: '10% off courses at Bright Future Institute.', destId: 'training', discount: 0.1 },
     topics: [
       { id: 'learn', prompt: '“What skill do you want to master first?”', choices: [
@@ -1562,7 +1587,7 @@ export const NPCS: NpcDef[] = [
   },
   {
     id: 'efua', name: 'Efua', role: 'Beach club host', datable: true, chat: ['Tonight is going to be lit 🔥', 'Come and dance!', 'Saw you at Labadi 😄'], personality: 'Stylish, easygoing, knows everyone.', emoji: '💃🏾', destId: 'lounge',
-    appearance: { skin: 3, hair: 4, hairColor: 5, outfit: 2, outfitColor: 4, accessory: 3 },
+    appearance: { skin: 3, hair: 4, hairColor: 5, outfit: 2, outfitColor: 4, accessory: 3, sex: 1 },
     perk: { friendAt: 40, text: '15% off everything at Labadi Beach Club.', destId: 'lounge', discount: 0.15 },
     topics: [
       { id: 'music', prompt: '“The DJ is spinning amapiano and highlife tonight.”', choices: [
@@ -1578,7 +1603,7 @@ export const NPCS: NpcDef[] = [
   {
     id: 'ama', name: 'Nurse Ama', role: 'Nurse at Korle Bu', personality: 'Kind, sharp-witted and always tired.', emoji: '👩🏾‍⚕️', destId: 'hospital', datable: true,
     chat: ['Drink water o! 💧', 'Night shift again 😮‍💨', 'Did you take your medicine?'],
-    appearance: { skin: 3, hair: 2, hairColor: 0, outfit: 1, outfitColor: 5, accessory: 0 },
+    appearance: { skin: 3, hair: 2, hairColor: 0, outfit: 1, outfitColor: 5, accessory: 0, sex: 1 },
     perk: { friendAt: 40, text: 'Free check-ups and quicker recovery.' },
     topics: [
       { id: 'shift', prompt: '“Twelve-hour shift and I still smile. Impressive, right?”', choices: [

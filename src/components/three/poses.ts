@@ -43,7 +43,8 @@ export const ACT_LOOK: Record<string, ActLook> = {
   lighttour: { pose: 'talk', wander: true }, boxing: { pose: 'box' }, oware: { pose: 'sit' }, porter: { pose: 'carry', prop: 'basket', wander: true },
   tourguide: { pose: 'talk', wander: true }, alleyrob: { pose: 'box' },
   // street crime
-  snatch: { pose: 'talk' }, phonesnatch: { pose: 'run' }, streetrob: { pose: 'box' },
+  snatch: { pose: 'talk' },
+  petfeed: { pose: 'kneel' }, petplay: { pose: 'cheer' }, petwalk: { pose: 'talk' }, petgroom: { pose: 'clean' }, petvet: { pose: 'talk' }, phonesnatch: { pose: 'run' }, streetrob: { pose: 'box' },
   // new places
   zootour: { pose: 'talk', wander: true }, forestwalk: { pose: 'talk', wander: true }, waiter: { pose: 'snack', prop: 'plate', wander: true },
   vendor: { pose: 'carry', prop: 'basket', wander: true }, baggage: { pose: 'carry', prop: 'box', wander: true }, fiveaside: { pose: 'run', prop: 'ball', wander: true },

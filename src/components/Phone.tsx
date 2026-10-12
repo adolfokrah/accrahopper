@@ -9,7 +9,7 @@ import { QUICK_MESSAGES, canRentOut, cleanCash, launderCap, loanLimit, missingRe
 import { LAUNDER, BIZ, HOME_SELL_BACK, SELL_BACK, PROJECTS, projectStages, BUSINESSES, BUSINESS_BY_ID, DRIVING, FINANCE, LOAN, PLOTS, STOCKS, VEHICLES, WORK_VEHICLES, homeDestId } from '@/game/content'
 import { plotValue } from '@/game/property'
 import { GOALS, TASK_BY_ID, taskProgress } from '@/game/life'
-import { LifeGoalsList } from './LifeUI'
+import { DreamCard, LifeGoalsList } from './LifeUI'
 import { CityMap } from './CityMap'
 import { useUI, type PhoneTab } from '@/game/ui'
 import { SKILL_IDS, type TxCategory } from '@/game/types'
@@ -241,7 +241,7 @@ function Assets() {
               icon={proj?.emoji ?? '🏗️'}
               iconBg="#f4e3cf"
               title={DEST_BY_ID[p.id].name}
-              sub={<>{!proj ? 'Empty land · choose a project on the plot' : done ? `${proj.name} complete${proj.income ? ` · earns ${formatMoney(proj.income[0])}–${formatMoney(proj.income[1])}/day` : ''}` : `${proj.name}: ${st.stage}/${stages.length} stages`} · Permit {st.permit === 'approved' ? '✅' : st.permit === 'pending' ? '⏳' : '❌'}{st.guards === 'active' ? ' · ⚠️ Land guards' : ''}<Bar v={st.stage} max={stages.length} color="#34c759" />
+              sub={<>{!proj ? 'Empty land · choose a project on the plot' : done ? `${proj.name} complete${proj.income ? ` · earns ${formatMoney(proj.income[0])}–${formatMoney(proj.income[1])}/day` : ''}` : `${proj.name}: ${st.stage}/${stages.length} stages`} · Permit {st.permit === 'approved' ? '✅' : st.permit === 'pending' && st.permitReady !== null ? `⏳ ready in ${untilText(st.permitReady - s.minutes)}` : '❌ apply at the Lands Commission'}{st.guards === 'active' ? ' · ⚠️ Land guards' : ''}<Bar v={st.stage} max={stages.length} color="#34c759" />
                 {s.rentedOut.includes(`plot:${p.id}`) && <> · 🔑 Rented out</>}
                 {!(s.housing.tier === 'house' && s.housing.plotId === p.id) && st.until === null && (
                   <span className="ios-chips tight">
@@ -494,24 +494,44 @@ function Messages() {
   )
 }
 
+/** "1d 4h", "5h 20m" or "a few minutes" until a game minute. */
+function untilText(mins: number) {
+  if (mins <= 10) return 'a few minutes'
+  const d = Math.floor(mins / 1440)
+  const h = Math.floor((mins % 1440) / 60)
+  const m = Math.floor(mins % 60)
+  return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`
+}
+
 function Calendar() {
   const s = useGame()
   const today = dayOf(s.minutes)
   const rentDay = dayOf(s.housing.nextRentDue)
   const days = Array.from({ length: 14 }, (_, i) => today - (today - 1) % 7 + i)
   const h = hourOf(s.minutes)
+  // permits being processed and builders at work, soonest first
+  const permits = Object.entries(s.plots).filter(([, p]) => p.owned && p.permit === 'pending' && p.permitReady !== null).sort((a, b) => a[1].permitReady! - b[1].permitReady!)
+  const builds = Object.entries(s.plots).filter(([, p]) => p.owned && p.until !== null).sort((a, b) => a[1].until! - b[1].until!)
+  const permitDays = new Set(permits.map(([, p]) => dayOf(p.permitReady!)))
   return (
     <AppShell title="Calendar">
       <div className="ios-cal">
         {['W1', 'W2'].map((w, wi) => (
           <div key={w} className="ios-cal-row">
             {days.slice(wi * 7, wi * 7 + 7).map((d) => (
-              <span key={d} className={`${d === today ? 'today' : ''} ${d === rentDay ? 'rent' : ''}`}><small>Day</small>{d}</span>
+              <span key={d} className={`${d === today ? 'today' : ''} ${d === rentDay ? 'rent' : ''} ${permitDays.has(d) ? 'permit' : ''}`}><small>Day</small>{d}</span>
             ))}
           </div>
         ))}
       </div>
       <Group header="Upcoming">
+        {permits.map(([id, p]) => (
+          <Row key={`p${id}`} icon="📜" iconBg="#ff9500" title="Building permit ready" sub={`${DEST_BY_ID[id].name} · in ${untilText(p.permitReady! - s.minutes)}`} detail={`Day ${dayOf(p.permitReady!)}, ${formatClock(p.permitReady!)}`} />
+        ))}
+        {builds.map(([id, p]) => (
+          <Row key={`b${id}`} icon="👷" iconBg="#34c759" title="Builders finish" sub={`${DEST_BY_ID[id].name} · in ${untilText(p.until! - s.minutes)}`} detail={`Day ${dayOf(p.until!)}, ${formatClock(p.until!)}`} />
+        ))}
+        {s.legal.caseDeadline !== null && <Row icon="⚖️" iconBg="#ff3b30" title="Court hearing deadline" sub="Accra High Court, or pay the fine" detail={`Day ${dayOf(s.legal.caseDeadline)}, ${formatClock(s.legal.caseDeadline)}`} />}
         <Row icon="🏠" iconBg="#af52de" title="Rent due" sub={`${HOMES[s.housing.tier].name} · ${formatMoney(HOMES[s.housing.tier].rent)}`} detail={`Day ${rentDay}`} />
         {s.employment && <Row icon={CAREERS[s.employment].emoji} iconBg="#0a84ff" title="Work shifts" sub={`${DEST_BY_ID[CAREERS[s.employment].workplace].name}`} detail={`${DEST_BY_ID[CAREERS[s.employment].workplace].hours[0]}:00–${DEST_BY_ID[CAREERS[s.employment].workplace].hours[1]}:00`} />}
         <Row icon="🎷" iconBg="#ff2d55" title="Live highlife night" sub="Labadi Beach Club" detail="Daily 18:00" />
@@ -869,6 +889,7 @@ function Goals() {
       </Group>
       <section className="ios-section">
         <h4>Life goals · {s.goalsActive.length} active · {s.goals.length} achieved</h4>
+        <div className="ios-group pad"><DreamCard /></div>
         <div className="ios-group pad"><LifeGoalsList /></div>
       </section>
     </AppShell>

@@ -4901,3 +4901,72 @@ button.ios-row:active {
 .garage-info.none { background: #fdf3e7; }
 .garage-info small { color: #5b6577; }
 .dealer-car.personal { border-color: #e9d9a8; }
+
+/* dream in life */
+.trait.dream .dream-path { font-weight: 800; font-size: 0.68rem; }
+.dream-path.clean { color: #1e7a48; }
+.dream-path.crooked { color: #b3261e; }
+.dream-path.either { color: #9a7a1e; }
+.dream-card { display: flex; flex-direction: column; gap: 8px; }
+.dream-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dream-steps li { display: grid; grid-template-columns: 24px 1fr auto; gap: 8px; align-items: center; font-size: 0.86rem; padding: 6px 8px; border-radius: 12px; background: #f6f7f9; }
+.dream-steps li.now { background: #fff6dd; box-shadow: inset 0 0 0 1.5px #f1b82d; }
+.dream-steps li.done { opacity: 0.7; }
+.dream-steps li small { color: #22a45d; font-weight: 800; }
+.dream-pick { display: flex; flex-direction: column; gap: 6px; }
+
+/* pets */
+.pet-shop { display: flex; flex-direction: column; gap: 8px; }
+.pet-offer .row { gap: 8px; align-items: center; }
+.pet-emoji { font-size: 1.3rem; }
+.pet-price { color: #1f2d45; }
+.pet-name { flex: 1; padding: 7px 10px; font-size: 0.85rem; }
+.pet-card { display: flex; flex-direction: column; gap: 10px; }
+.pet-head { display: flex; align-items: center; gap: 10px; }
+.pet-avatar { width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center; font-size: 1.7rem; background: #fff5e3; box-shadow: inset 0 0 0 2px #f1b82d; flex: none; }
+.pet-title { border: 0; background: none; padding: 0; text-align: left; font: inherit; display: flex; flex-direction: column; }
+.pet-title b { font-size: 1.05rem; color: #1f2d45; }
+.pet-title small { color: #8b95a7; font-size: 0.72rem; }
+.pet-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+.pet-bar { display: flex; flex-direction: column; gap: 2px; font-size: 0.75rem; font-weight: 700; color: #4a5568; }
+.pet-rehome { border: 0; background: none; color: #8b95a7; font: inherit; font-size: 0.75rem; text-decoration: underline; align-self: flex-start; padding: 0; }
+
+/* newly bought furniture waiting in storage */
+.inv li.stored { flex-direction: column; align-items: stretch; cursor: grab; }
+.stored-main { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.inv li.stored.fresh {
+  border: 2px solid #22b35e;
+  background: #f0fbf4;
+  animation: fresh-in 0.6s ease-out, fresh-glow 1.8s ease-in-out 0.6s 3;
+}
+@keyframes fresh-in { from { transform: scale(0.96); opacity: 0.4; } }
+@keyframes fresh-glow { 50% { box-shadow: 0 0 0 6px rgba(34, 179, 94, 0.18); } }
+.new-pill { font-style: normal; margin-left: 6px; background: #22b35e; color: #fff; font-size: 0.62rem; font-weight: 800; padding: 1px 7px; border-radius: 999px; vertical-align: middle; }
+.place-tips { margin: 8px 0 0; padding-left: 18px; font-size: 0.78rem; color: #3f4b5c; display: flex; flex-direction: column; gap: 3px; }
+.place-tips .ok { color: #1e8a4c; font-weight: 800; }
+@media (prefers-reduced-motion: reduce) { .inv li.stored.fresh { animation: none; } }
+.inv li.stored .place-tips li {
+  display: list-item;
+  border: 0;
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: 0.78rem;
+}
+.inv li.stored .stored-main { flex-wrap: wrap; }
+
+/* building permit guidance on a plot */
+.permit-help { display: flex; flex-direction: column; gap: 6px; background: #fdf3e7; border: 1px solid #f3d6a8; border-radius: 14px; padding: 10px 12px; }
+.permit-help small { color: #5b4a32; line-height: 1.35; }
+.permit-help.pending { background: #eef4fd; border-color: #c9dbf5; }
+.permit-help.pending small { color: #34507a; }
+.ios-cal-row span.permit { box-shadow: inset 0 -3px 0 #ff9500; }
+
+/* phones, inside your home: keep the room visible above the sheet so furniture can be grabbed */
+@media (max-width: 760px) {
+  .hud2 .panel-slot.panel-home.open { max-height: 48vh; }
+}
+@media (max-width: 760px) {
+  /* placing furniture: tools sit under the top bar, clear of the sheet and tab bar */
+  .deco-bar { top: calc(66px + env(safe-area-inset-top)) !important; bottom: auto !important; }
+}

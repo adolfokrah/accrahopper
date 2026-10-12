@@ -1,5 +1,5 @@
 import { formatMoney, hourOf } from './config'
-import { DESTINATIONS, DEST_BY_ID, KM_PER_TILE, PROGRAMS, PROJECTS, RIDES, projectStages, type Lifestyle, type RideMode } from './content'
+import { CAREERS, DESTINATIONS, DEST_BY_ID, KM_PER_TILE, PROGRAMS, PROJECTS, RIDES, projectStages, type Lifestyle, type RideMode } from './content'
 import type { GameState } from './store'
 
 export const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -143,6 +143,95 @@ export const GOALS: GoalDef[] = [
   { id: 's_bizup', name: 'Grow a business to level 3', icon: '📈', reward: 400, appear: (s) => Object.keys(s.businesses).length > 0, test: (s) => Object.values(s.businesses).some((b) => b.level >= 3), drop: (s) => Object.keys(s.businesses).length === 0 },
   { id: 's_moveup', name: 'Move back up', icon: '⬆️', reward: 150, repeat: true, appear: (s) => flag(s, 'evicted') && s.housing.tier === 'room', why: 'You lost your home over rent. Climb back.', test: (s) => s.housing.tier !== 'room' },
 ]
+/* ------------------------------ dreams in life ------------------------------ */
+/** One step towards a dream: a test, an optional progress bar and where to go. */
+export interface DreamStep {
+  text: string
+  hint: string
+  test: (s: GameState) => boolean
+  progress?: (s: GameState) => { cur: number; total: number; label: string }
+  dest?: string
+}
+export interface DreamDef {
+  id: string
+  name: string
+  emoji: string
+  blurb: string
+  /** Clean or crooked: shown on the card. */
+  path: 'clean' | 'crooked' | 'either'
+  steps: DreamStep[]
+}
+/** Cash rewards for each step of a dream, smallest first. */
+export const DREAM_REWARDS = [100, 250, 500, 1000, 3000]
+const worth = (n: number) => (s: GameState) => ({ cur: Math.min(wealth(s), n), total: n, label: 'Net worth' })
+const properties = (s: GameState) => s.owned.length + Object.values(s.plots).filter((p) => p.owned && p.stage >= projectStages(p.project).length).length
+const legitTop = (s: GameState) => Object.entries(s.careers).some(([k, c]) => (c?.level ?? 0) >= 3 && !CAREERS[k as keyof typeof CAREERS]?.illegal)
+const legitJob = (s: GameState) => !!s.employment && !CAREERS[s.employment]?.illegal
+export const AMBITIONS: DreamDef[] = [
+  {
+    id: 'tycoon', name: 'Business tycoon', emoji: '🏢', path: 'clean', blurb: 'Build an empire of businesses across Accra.',
+    steps: [
+      { text: 'Save GH₵5,000', hint: 'Work shifts and hustles. Spend wisely.', test: (s) => wealth(s) >= 5000, progress: worth(5000) },
+      { text: 'Buy your first business', hint: 'Businesses are sold at Accra Realty.', test: (s) => Object.keys(s.businesses).length > 0, dest: 'realty' },
+      { text: 'Grow a business to level 3', hint: 'Upgrade it from the Assets app.', test: (s) => Object.values(s.businesses).some((b) => b.level >= 3) },
+      { text: 'Own 3 businesses', hint: 'Profits land every morning. Reinvest them.', test: (s) => Object.keys(s.businesses).length >= 3, progress: (s) => ({ cur: Math.min(3, Object.keys(s.businesses).length), total: 3, label: 'Businesses' }), dest: 'realty' },
+      { text: 'Be worth GH₵100,000', hint: 'Cash plus savings. You are almost a tycoon.', test: (s) => wealth(s) >= 100000, progress: worth(100000) },
+    ],
+  },
+  {
+    id: 'landlord', name: 'Property mogul', emoji: '🏘️', path: 'clean', blurb: 'Land, houses and tenants paying you rent.',
+    steps: [
+      { text: 'Save GH₵10,000', hint: 'Land is the first big buy.', test: (s) => wealth(s) >= 10000, progress: worth(10000) },
+      { text: 'Buy a plot of land', hint: 'Accra Realty lists plots all over the city.', test: (s) => Object.values(s.plots).some((p) => p.owned), dest: 'realty' },
+      { text: 'Build on your land', hint: 'Get a permit and build stage by stage.', test: (s) => builtPlot(s) },
+      { text: 'Earn rent from a property', hint: 'Let a home you own, or build a rental.', test: (s) => earningProperty(s) },
+      { text: 'Own 3 properties', hint: 'Homes you bought plus houses you built.', test: (s) => properties(s) >= 3, progress: (s) => ({ cur: Math.min(3, properties(s)), total: 3, label: 'Properties' }), dest: 'realty' },
+    ],
+  },
+  {
+    id: 'professional', name: 'Respected professional', emoji: '🎓', path: 'clean', blurb: 'Education, an honest career and a good name.',
+    steps: [
+      { text: 'Get an honest job', hint: 'Start anywhere. Makola Market is hiring.', test: legitJob, dest: 'market' },
+      { text: 'Earn a degree', hint: 'Enrol at the University of Ghana, Legon.', test: (s) => s.edu.degrees.length > 0, dest: 'university' },
+      { text: 'Get promoted', hint: 'Work shifts and build your skills.', test: (s) => Object.entries(s.careers).some(([k, c]) => (c?.level ?? 0) >= 2 && !CAREERS[k as keyof typeof CAREERS]?.illegal) },
+      { text: 'Reach respect 70', hint: 'Church, volunteering and honest work raise it.', test: (s) => s.rep.respect >= 70, progress: (s) => ({ cur: Math.min(70, Math.round(s.rep.respect)), total: 70, label: 'Respect' }) },
+      { text: 'Reach the top of an honest career', hint: 'Senior level, clean hands.', test: legitTop },
+    ],
+  },
+  {
+    id: 'baller', name: 'Living large', emoji: '💎', path: 'either', blurb: 'The big life: villa, luxury car, money to spray.',
+    steps: [
+      { text: 'Save GH₵20,000', hint: 'Any way you can.', test: (s) => wealth(s) >= 20000, progress: worth(20000) },
+      { text: 'Live in a premium home', hint: 'Move into a premium home or your own house.', test: (s) => !s.housing.homeless && (s.housing.tier === 'premium' || s.housing.tier === 'house') },
+      { text: 'Own a luxury car', hint: 'A Prado, sports car or S-Class from Spintex Motors.', test: (s) => s.vehicles.some((v) => v === 'suv' || v === 'sports' || v === 'luxury'), dest: 'dealer' },
+      { text: 'Be worth GH₵250,000', hint: 'Now you are living large.', test: (s) => wealth(s) >= 250000, progress: worth(250000) },
+    ],
+  },
+  {
+    id: 'kingpin', name: 'Street king', emoji: '🕶️', path: 'crooked', blurb: 'Rule the streets. Big risk, big money.',
+    steps: [
+      { text: 'Earn street cred 25', hint: 'Crime builds a name. Police build a file.', test: (s) => s.rep.street >= 25, progress: (s) => ({ cur: Math.min(25, Math.round(s.rep.street)), total: 25, label: 'Street cred' }) },
+      { text: 'Work an illegal hustle', hint: 'Sakawa, galamsey or smuggling.', test: (s) => !!s.employment && !!CAREERS[s.employment]?.illegal },
+      { text: 'Launder GH₵10,000', hint: 'Through a business or the Makola forex boys.', test: (s) => (s.stats.laundered ?? 0) >= 10000, progress: (s) => ({ cur: Math.min(10000, s.stats.laundered ?? 0), total: 10000, label: 'Laundered' }) },
+      { text: 'Own a business as a front', hint: 'Its till cleans your money every day.', test: (s) => Object.keys(s.businesses).length > 0, dest: 'realty' },
+      { text: 'Street cred 80 and GH₵100,000', hint: 'Untouchable.', test: (s) => s.rep.street >= 80 && wealth(s) >= 100000, progress: worth(100000) },
+    ],
+  },
+  {
+    id: 'family', name: 'Family first', emoji: '👨‍👩‍👧', path: 'clean', blurb: 'Love, marriage and a home of your own.',
+    steps: [
+      { text: 'Find love', hint: 'Make friends and ask someone out.', test: (s) => !!s.romance.partner },
+      { text: 'Get engaged', hint: 'Buy a ring at the mall and propose.', test: (s) => s.romance.stage === 'engaged' || s.romance.stage === 'married' },
+      { text: 'Get married', hint: 'Plan the wedding together.', test: (s) => s.romance.stage === 'married' },
+      { text: 'Own your family home', hint: 'Buy a home or build a house.', test: (s) => s.owned.length > 0 },
+      { text: 'Save GH₵30,000 for the family', hint: 'In the bank, for the children’s future.', test: (s) => s.bank.balance >= 30000, progress: (s) => ({ cur: Math.min(30000, s.bank.balance), total: 30000, label: 'Savings' }), dest: 'bank' },
+    ],
+  },
+]
+export const AMBITION_BY_ID: Record<string, DreamDef> = Object.fromEntries(AMBITIONS.map((a) => [a.id, a]))
+/** Which dreams a life event makes harder: suggest a rethink then. */
+export const DREAM_SETBACKS: Record<string, string[]> = { trouble: ['professional', 'family'], evicted: ['baller', 'landlord'], breakup: ['family'], fired: ['professional', 'tycoon'] }
+
 export const GOAL_BY_ID: Record<string, GoalDef> = Object.fromEntries(GOALS.map((g) => [g.id, g]))
 /** Whether a goal belongs to this character's life at all. */
 export const goalFits = (s: GameState, g: GoalDef) => !g.for || g.for.includes(s.profile?.lifestyle ?? 'worker')

@@ -13,6 +13,7 @@ import { Character, type Motion, type Pose, type Prop } from './Character'
 import { furnitureUse } from './poses'
 import { Merged, Part, Walls, actionFocus, bulbMat, windowMat, type WallSkin } from './shared'
 import { Label } from './Label'
+import { PetFollower } from './PetFollower'
 
 export const INTERIOR_ORIGIN = new THREE.Vector3(300, 0, 300)
 const NONE: string[] = []
@@ -833,15 +834,25 @@ export function Interior({ visible }: { visible: boolean }) {
   }, [moving, cursor, holdRot, tier, inventory, ext])
   const ghostRef = useRef(ghost)
   ghostRef.current = ghost
+  /** Latest tile under the pointer, updated straight away (a quick drop can beat the re-render). */
+  const cursorRef = useRef<{ x: number; y: number } | null>(null)
 
   // finish a drag wherever the pointer is released
   useEffect(() => {
     if (dragUid === null) return
     const up = () => {
-      const g = ghostRef.current
       const ui = useUI.getState()
-      if (g && g.ok && ui.dragUid !== null) useGame.getState().placeFurniture(ui.dragUid, g.x, g.y, ui.holdRot)
+      const c = cursorRef.current
+      const st = useGame.getState()
+      const type = ui.dragUid !== null ? (ui.dragUid < 0 ? itemsInHome(st.housing.tier, st.inventory).find((i) => i.id === ui.dragUid)?.type : st.inventory.find((o) => o.uid === ui.dragUid)?.type) : undefined
+      if (c && type && ui.dragUid !== null) {
+        const fp = footprint(type, ui.holdRot)
+        const x = c.x - Math.floor((fp.w - 1) / 2)
+        const y = c.y - Math.floor((fp.d - 1) / 2)
+        if (canPlace(st.housing.tier, st.inventory, type, x, y, ui.holdRot, ui.dragUid, extCount(st.upgrades[st.housing.tier])).ok) st.placeFurniture(ui.dragUid, x, y, ui.holdRot)
+      }
       useUI.setState({ dragUid: null })
+      cursorRef.current = null
       setCursor(null)
     }
     const cancel = () => { useUI.setState({ dragUid: null }); setCursor(null) }
@@ -1041,6 +1052,7 @@ export function Interior({ visible }: { visible: boolean }) {
   const setC = (e: ThreeEvent<PointerEvent>) => {
     const x = Math.floor(e.point.x - INTERIOR_ORIGIN.x)
     const y = Math.floor(e.point.z - INTERIOR_ORIGIN.z)
+    cursorRef.current = { x, y }
     setCursor((c) => (c && c.x === x && c.y === y ? c : { x, y }))
   }
 
@@ -1081,8 +1093,8 @@ export function Interior({ visible }: { visible: boolean }) {
       <mesh
         position={[w / 2, 0.11, d / 2]}
         rotation-x={-Math.PI / 2}
-        onPointerMove={(e) => { if (movingUid !== null) setC(e) }}
-        onPointerDown={(e) => { if (movingUid !== null) setC(e) }}
+        onPointerMove={(e) => { const u = useUI.getState(); if (u.dragUid !== null || u.holdingUid !== null) setC(e) }}
+        onPointerDown={(e) => { const u = useUI.getState(); if (u.dragUid !== null || u.holdingUid !== null) setC(e) }}
         onClick={(e) => {
           if (e.delta > 6) return
           const ui = useUI.getState()
@@ -1140,6 +1152,7 @@ export function Interior({ visible }: { visible: boolean }) {
         </group>
       )}
 
+      <PetFollower getTarget={() => ({ x: cur.current.x, z: cur.current.z, rot: player.current?.rotation.y ?? 0, moving: motion.current.moving })} />
       <group ref={player} position={[lay.door.x + 0.5, 0.12, lay.door.y + 0.3]}>
         <Character appearance={profile?.appearance ?? DEFAULT_APPEARANCE} getMotion={() => motion.current} />
         {hookup && activity?.defId === 'intimate' && (

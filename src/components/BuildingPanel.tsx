@@ -25,6 +25,7 @@ import {
   WORK_VEHICLES,
   BUILD_STAGES,
   PROJECTS,
+  PERMIT,
   PROJECT_IDS,
   HOME_SELL_BACK,
   SELL_BACK,
@@ -52,6 +53,7 @@ import { canRentOut, missingRequirements, rentOutRange, useGame, type GameState,
 import { useUI } from '@/game/ui'
 import type { VehicleId } from '@/game/content'
 import { Catalogue } from './Catalogue'
+import { PetShop } from './Pets'
 import { Btn, Chip, Meter, Sheet } from './kit'
 
 const fmtHour = (h: number) => (h === 24 ? 'midnight' : `${h % 12 === 0 ? 12 : h % 12}${h >= 12 && h < 24 ? 'pm' : 'am'}`)
@@ -338,10 +340,23 @@ function PlotCard({ id }: { id: string }) {
     <div className="card-inner">
       <div className="row between"><b>🏗️ Your land</b><Chip tone="plus">Worth {formatMoney(value)}</Chip></div>
       <div className="chips">
-        <Chip tone={p.permit === 'approved' ? 'plus' : p.permit === 'pending' ? 'blue' : 'warn'}>📜 Permit: {p.permit}</Chip>
+        <Chip tone={p.permit === 'approved' ? 'plus' : p.permit === 'pending' ? 'blue' : 'warn'}>📜 {p.permit === 'approved' ? 'Permit approved' : p.permit === 'pending' ? 'Permit pending' : 'No permit'}</Chip>
         <Chip tone={p.guards === 'active' ? 'minus' : 'plus'}>🪓 Land guards: {p.guards === 'active' ? 'on site!' : p.guards === 'settled' ? 'settled' : 'none'}</Chip>
         {p.noPermit && p.permit !== 'approved' && <Chip tone="minus">Unpermitted build</Chip>}
       </div>
+      {p.permit === 'none' && (
+        <div className="permit-help">
+          <b>📜 You need a building permit for {DEST_BY_ID[id].name}</b>
+          <small>Apply at the <b>Lands Commission</b> in Ridge (open {fmtHour(DEST_BY_ID.lands.hours[0])}–{fmtHour(DEST_BY_ID.lands.hours[1])}). It costs {formatMoney(PERMIT.fee)} and is approved {PERMIT.days} days later. Choose this plot there: each plot needs its own permit.</small>
+          <Btn small kind="soft" disabled={!!s.activity} onClick={() => { useUI.getState().setPanel('none'); walkToDest('lands') }}>🧭 Go to the Lands Commission</Btn>
+        </div>
+      )}
+      {p.permit === 'pending' && p.permitReady !== null && (
+        <div className="permit-help pending">
+          <b>⏳ Permit for {DEST_BY_ID[id].name} is being processed</b>
+          <small>Approved on Day {dayOf(p.permitReady)} around {fmtHour(hourOf(p.permitReady))}. You can build properly then.</small>
+        </div>
+      )}
       {canPick && (
         <div className="project-pick">
           <b>{proj ? `Project: ${proj.emoji} ${proj.name}` : 'What do you want to build?'}</b>
@@ -372,10 +387,10 @@ function PlotCard({ id }: { id: string }) {
       {proj && !done && p.until === null && next && p.guards !== 'active' && (
         <>
           <Btn disabled={!near || s.money < next.price || !!s.activity || p.permit !== 'approved'} onClick={() => { useGame.getState().buildNext(id); sfx('coin') }}>
-            Start {next.name.toLowerCase()} · {formatMoney(next.price)}
+            {p.permit === 'approved' ? `Start ${next.name.toLowerCase()} · ${formatMoney(next.price)}` : `🔒 Start ${next.name.toLowerCase()}: needs an approved permit`}
           </Btn>
           {p.permit !== 'approved' && (
-            <Btn small kind="ghost" disabled={!near || s.money < next.price} onClick={() => useGame.getState().buildNext(id, true)}>⚠️ Build without a permit (risk of demolition)</Btn>
+            <Btn small kind="ghost" disabled={!near || s.money < next.price} onClick={() => useGame.getState().buildNext(id, true)}>⚠️ Build now without a permit{p.permit === 'pending' ? ' (yours is still pending)' : ''}: risk of demolition</Btn>
           )}
         </>
       )}
@@ -564,7 +579,7 @@ export function BuildingPanel() {
   const id = useUI((s) => s.selectedDest)!
   const dest = DEST_BY_ID[id]
   const s = useGame()
-  const [tab, setTab] = useState<'do' | 'shop'>('do')
+  const [tab, setTab] = useState<'do' | 'shop' | 'pets'>('do')
   const near = s.nearDest === id
   const open = dest.hours[0] === 0 && dest.hours[1] === 24 ? true : isOpen(dest.hours, hourOf(s.minutes))
   const dist = Math.round(Math.hypot(s.player.x - (dest.door.x + 0.5), s.player.z - (dest.door.z + 0.5)))
@@ -587,7 +602,7 @@ export function BuildingPanel() {
       <p className="blurb">{dest.blurb}</p>
       {!near && s.view === 'world' && (
         <Btn onClick={() => walkToDest(id)} disabled={!!s.activity}>
-          🚶 {canEnter(id) ? 'Go there' : 'Walk here'} ({dist} tiles)
+          🧭 Go there ({dist} tiles)
         </Btn>
       )}
       {near && s.view === 'world' && canEnter(id) && (
@@ -618,10 +633,12 @@ export function BuildingPanel() {
         <div className="tabs">
           <button className={tab === 'do' ? 'on' : ''} onClick={() => setTab('do')}>Stalls</button>
           <button className={tab === 'shop' ? 'on' : ''} onClick={() => setTab('shop')}>Furniture</button>
+          <button className={tab === 'pets' ? 'on' : ''} onClick={() => setTab('pets')}>Pets</button>
         </div>
       )}
       {(dest.kind !== 'market' || tab === 'do') && acts.length > 0 && <ActivityList list={acts} />}
       {dest.kind === 'market' && tab === 'shop' && <Shop dest={id} />}
+      {dest.kind === 'market' && tab === 'pets' && <PetShop />}
 
     </Sheet>
   )

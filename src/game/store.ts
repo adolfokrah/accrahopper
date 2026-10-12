@@ -38,6 +38,9 @@ import {
   LOAN,
   OFFICERS,
   CHARGES,
+  PETS,
+  PET_DECAY,
+  PET_NAMES,
   LAUNDER,
   RESPECT_ACTS,
   RESPECT_REQ,
@@ -83,7 +86,7 @@ import { cancelPath, defaultZoom, runtime, teleport } from './runtime'
 import { nearestJunction, roadRoute } from './world'
 import { plotValue } from './property'
 import { clockRef, useUI } from './ui'
-import { GOALS, GOAL_BY_ID, TASK_BY_ID, goalFits, pickTasks, rideQuote, taskProgress, isSunday } from './life'
+import { AMBITION_BY_ID, DREAM_REWARDS, DREAM_SETBACKS, GOALS, GOAL_BY_ID, TASK_BY_ID, goalFits, pickTasks, rideQuote, taskProgress, isSunday } from './life'
 import { PLAYER_START, districtAt } from './world'
 import type {
   ShiftState,
@@ -106,8 +109,7 @@ import type {
   SkillId,
   Stats,
   Tx,
-  TxCategory,
-} from './types'
+  TxCategory, Pronouns, Pet, PetType } from './types'
 
 export interface GameState {
   screen: 'menu' | 'create' | 'game'
@@ -176,6 +178,10 @@ export interface GameState {
   goals: string[]
   /** Life goals you are working toward right now (they come and go with your life). */
   goalsActive: string[]
+  /** Steps of your dream in life already reached (rewarded once each). */
+  dreamStep: number
+  /** Your pet, if you have one. */
+  pet: Pet | null
   /** When big life events last happened (fired, breakup, evicted, trouble): game minute. */
   lifeFlags: Record<string, number>
   visited: string[]
@@ -188,6 +194,12 @@ export interface GameState {
   loadFromSave: (saved: SavedGame) => void
   toMenu: () => void
   updateAppearance: (a: Appearance) => void
+  setPronouns: (p: Pronouns) => void
+  /** Pick a new dream in life: steps already true count as reached, without rewards. */
+  setDream: (id: string) => void
+  buyPet: (type: PetType, name: string) => void
+  renamePet: (name: string) => void
+  rehomePet: () => void
   tick: (dt: number) => void
   syncPlayer: () => void
   startActivity: (defId: string, ctx: ActivityContext) => { ok: boolean; reason?: string }
@@ -283,7 +295,7 @@ type FnKeys<T> = { [K in keyof T]: T[K] extends (...args: never[]) => unknown ? 
 /** The subset of GameState that is persisted. */
 export type SavedGame = Omit<GameState, FnKeys<GameState> | 'screen' | 'nearDest'>
 
-const emptyStats = (): Stats => ({ mealsEaten: 0, shiftsCompleted: 0, sleeps: 0, moneyEarned: 0, moneySpent: 0, tripsTaken: 0, conversations: 0 })
+const emptyStats = (): Stats => ({ mealsEaten: 0, shiftsCompleted: 0, sleeps: 0, moneyEarned: 0, moneySpent: 0, tripsTaken: 0, conversations: 0, laundered: 0 })
 
 export const freshGame = (profile: Profile | null): SavedGame => ({
   profile,
@@ -340,6 +352,8 @@ export const freshGame = (profile: Profile | null): SavedGame => ({
   today: {},
   goals: [],
   goalsActive: [],
+  dreamStep: 0,
+  pet: null,
   lifeFlags: {},
   visited: [],
   chats: {},
@@ -497,6 +511,29 @@ function decayNeeds(d: GameState, minutes: number) {
     d.needs[k] = clamp(d.needs[k] - rate)
   }
   if (d.needs.hunger <= 0) d.needs.energy = clamp(d.needs.energy - (BALANCE.starvingEnergyDrain / 60) * minutes)
+  petDecay(d, minutes)
+}
+
+/** Your pet gets hungry, bored and dirty; neglect costs its health and, in the end, the pet. */
+function petDecay(d: GameState, minutes: number) {
+  if (!d.pet) return
+  const h = minutes / 60
+  const p = { ...d.pet }
+  p.hunger = clamp(p.hunger - PET_DECAY.hunger * h * (p.type === 'cat' ? 0.7 : 1))
+  p.happy = clamp(p.happy - PET_DECAY.happy * h * (p.type === 'parrot' ? 1.3 : 1))
+  p.clean = clamp(p.clean - PET_DECAY.clean * h)
+  const neglected = p.hunger < 10 || p.happy < 10 || p.clean < 5
+  p.health = clamp(p.health + (neglected ? -2.5 : 0.6) * h)
+  const def = PETS[p.type]
+  if (p.health <= 0) {
+    d.pet = null
+    addRep(d, 0, -4)
+    showResult(d, `${p.name} ran away`, '💔', [`Your ${def.name.toLowerCase()} was hungry, unhappy and sick, and left.`, 'Neighbours noticed. Respect −4.', 'You can adopt another pet at Makola Market.'], 'bad')
+    return
+  }
+  if (d.pet.health >= 30 && p.health < 30) toast(`${def.emoji} ${p.name} is getting sick. Feed, play and take them to the vet.`, 'bad')
+  else if (d.pet.hunger >= 20 && p.hunger < 20) toast(`${def.emoji} ${p.name} is hungry.`, 'warn')
+  d.pet = p
 }
 
 function advance(d: GameState, minutes: number, decay = true) {
@@ -777,7 +814,16 @@ function finishActivity(d: GameState) {
 
   // ---- custom effects
   const fx = a.effect ?? ''
-  if (fx === 'sleeprough') {
+  if (fx.startsWith('pet_') && d.pet) {
+    const p = { ...d.pet }
+    const name = p.name
+    if (fx === 'pet_feed') { p.hunger = 100; p.happy = clamp(p.happy + 5); lines.push(`🍖 ${name} ate everything.`) }
+    if (fx === 'pet_play') { p.happy = clamp(p.happy + 40); lines.push(`🎾 ${name} had the best time.`) }
+    if (fx === 'pet_walk') { p.happy = clamp(p.happy + 35); p.clean = clamp(p.clean - 10); p.health = clamp(p.health + 5); lines.push(`🦮 ${name} sniffed every corner of the block.`) }
+    if (fx === 'pet_groom') { p.clean = 100; p.happy = clamp(p.happy + 5); lines.push(`🛁 ${name} is clean and shiny.`) }
+    if (fx === 'pet_vet') { p.health = 100; lines.push(`🩺 The vet says ${name} is healthy.`) }
+    d.pet = p
+  } else if (fx === 'sleeprough') {
     lines.push('🥶 A cold, uncomfortable night outdoors.')
     if (Math.random() < 0.18 && d.money > 0) {
       const lost = Math.round(d.money * 0.35)
@@ -843,13 +889,13 @@ function finishActivity(d: GameState) {
     lines.push(`💕 ${NPC_BY_ID[a.ctx.npc].name} had a lovely time. (+10)`)
   }
   if (fx === 'permit') {
-    const pid = Object.keys(d.plots).find((k) => d.plots[k].owned && d.plots[k].permit === 'none')
+    const pid = a.ctx.plot && d.plots[a.ctx.plot]?.permit === 'none' ? a.ctx.plot : Object.keys(d.plots).find((k) => d.plots[k].owned && d.plots[k].permit === 'none')
     if (pid) {
       d.plots[pid] = { ...d.plots[pid], permit: 'pending', permitReady: d.minutes + PERMIT.days * 1440 }
       lines.push(`📝 Permit for ${DEST_BY_ID[pid].name} submitted. Approval in ${PERMIT.days} days.`)
     }
   } else if (fx === 'permitbribe') {
-    const pid = Object.keys(d.plots).find((k) => d.plots[k].owned && d.plots[k].permit === 'none')
+    const pid = a.ctx.plot && d.plots[a.ctx.plot]?.permit === 'none' ? a.ctx.plot : Object.keys(d.plots).find((k) => d.plots[k].owned && d.plots[k].permit === 'none')
     if (pid && Math.random() < PERMIT.bribeChance) {
       d.plots[pid] = { ...d.plots[pid], permit: 'approved', permitReady: null }
       lines.push(`🤫 The officer smiled. Permit for ${DEST_BY_ID[pid].name} approved on the spot.`)
@@ -1070,6 +1116,8 @@ export function rollOfficer(): Officer {
 function lifeEvent(d: GameState, key: string) {
   d.lifeFlags = { ...d.lifeFlags, [key]: d.minutes }
   if (key === 'evicted') addRep(d, 0, -8)
+  const dream = d.profile?.dream
+  if (dream && DREAM_SETBACKS[key]?.includes(dream)) toast(`🔄 Life changed. Your dream (${AMBITION_BY_ID[dream]?.name}) just got harder. You can keep going or pick a new one in Phone → Goals.`, 'info')
 }
 
 function arrest(d: GameState, charge: keyof typeof CHARGES = 'theft') {
@@ -1371,6 +1419,13 @@ function dayChange(d: GameState) {
   // tenants in homes you own
   const rand = (r: [number, number]) => Math.round(r[0] + Math.random() * (r[1] - r[0]))
   bizTotal += tenantDay(d, rand)
+  // a happy pet starts your day well
+  if (d.pet && d.pet.happy >= 60 && d.pet.health >= 50) {
+    const def = PETS[d.pet.type]
+    d.needs.fun = clamp(d.needs.fun + 8)
+    d.needs.social = clamp(d.needs.social + (d.pet.type === 'parrot' ? 8 : 4))
+    toast(`${def.emoji} ${d.pet.name} greeted you this morning. Fun +8.`, 'good')
+  }
   // notice to quit while your own rent is overdue
   if (d.housing.overdueSince !== null && !d.housing.homeless) {
     const left = Math.max(1, Math.ceil((d.housing.overdueSince + BALANCE.rentGraceHours * 60 - d.minutes) / 60))
@@ -1461,6 +1516,21 @@ function checkGoals(d: GameState) {
   }
   d.goalsActive = active
   d.goals = done
+  // your dream in life: reward each step once, in order
+  const dream = d.profile?.dream ? AMBITION_BY_ID[d.profile.dream] : undefined
+  if (dream) {
+    while (d.dreamStep < dream.steps.length && dream.steps[d.dreamStep].test(d)) {
+      const step = dream.steps[d.dreamStep]
+      const reward = DREAM_REWARDS[Math.min(d.dreamStep, DREAM_REWARDS.length - 1)]
+      d.dreamStep++
+      if (quiet) continue
+      earn(d, reward, `Dream step: ${step.text}`, 'bonus')
+      if (d.dreamStep >= dream.steps.length) {
+        addRep(d, dream.path === 'crooked' ? 15 : 0, dream.path === 'crooked' ? 0 : 15)
+        showResult(d, 'Dream achieved!', dream.emoji, [`You became a ${dream.name.toLowerCase()}.`, `💰 +${formatMoney(reward)}`, 'Pick a new dream in Phone → Goals, or enjoy the life you built.'], 'good')
+      } else toast(`🌟 Dream step done: ${step.text} (+${formatMoney(reward)}). Next: ${dream.steps[d.dreamStep].text}`, 'good')
+    }
+  }
   if (quiet) d.lifeFlags = { ...d.lifeFlags, goalsInit: d.minutes }
 }
 
@@ -1471,7 +1541,7 @@ function timeEffects(d: GameState, prev: number) {
   for (const [pid, p] of Object.entries(d.plots)) {
     if (p.permit === 'pending' && p.permitReady !== null && now >= p.permitReady) {
       d.plots[pid] = { ...p, permit: 'approved', permitReady: null }
-      toast(`📜 Building permit approved for ${DEST_BY_ID[pid].name}.`, 'good')
+      showResult(d, 'Building permit approved', '📜', [`The Lands Commission approved your permit for ${DEST_BY_ID[pid].name}.`, p.project ? '🏗️ Go to the plot and start building.' : '🏗️ Go to the plot, choose what to build, then start.'], 'good')
     }
     const q = d.plots[pid]
     if (q.until !== null && now >= q.until) {
@@ -1641,7 +1711,8 @@ function timeEffects(d: GameState, prev: number) {
     if (friendPoints(d, 'yaw') >= 15 && hr >= 10 && hr < 21) pool.push({ id: 'friend_invite', w: EVENTS.friend_invite.weight })
     if (inWorld && districtAt(d.player.x, d.player.z) === 'commercial' && hr >= 8 && hr < 19) pool.push({ id: 'market_sale', w: EVENTS.market_sale.weight })
     // known on the streets: small-time robbers leave you alone
-    if (inWorld && (hr >= 20 || hr < 5) && d.money >= 60 && d.rep.street < 50) pool.push({ id: 'mugged', w: 9 })
+    const guarded = d.pet?.type === 'guard' && d.pet.happy >= 40
+    if (inWorld && (hr >= 20 || hr < 5) && d.money >= 60 && d.rep.street < 50) pool.push({ id: 'mugged', w: guarded ? 2 : 9 })
     // known to the police: patrols stop and search you
     if (inWorld && d.legal.heat >= 25) pool.push({ id: 'police_stop', w: Math.round(d.legal.heat / 8) })
     if (d.view === 'home' && hr >= 18 && hr < 23 && !(d.upgrades[d.housing.tier] ?? []).includes('generator')) pool.push({ id: 'dumsor', w: 3 })
@@ -1709,7 +1780,8 @@ export const useGame = create<GameState>((set, get) => ({
     g.player = { x: home.door.x + 0.5, z: home.door.z + 0.5, rot: 0 }
     teleport(g.player.x, g.player.z)
     runtime.cam.zoom = defaultZoom()
-    set({ ...g, screen: 'game', nearDest: home.id })
+    // a new life starts at home, inside your own room
+    set({ ...g, screen: 'game', nearDest: home.id, view: 'home', viewing: null, insideDest: null })
     useUI.setState({ panel: 'none', selectedDest: null, editMode: false, holdingUid: null, dialog: null, paused: false, trackedDest: null, toasts: [], inbox: [], unread: 0 })
     const where = AREA_BY_ID[home.area]?.name ?? 'Accra'
     toast(`Akwaaba to ${where}, ${profile.name}! ${start.lifestyle === 'dadaba' ? 'Your parents set you up nicely.' : start.lifestyle === 'hustler' ? 'Time to hustle.' : ''} Follow the objective to get started.`, 'good')
@@ -1727,6 +1799,54 @@ export const useGame = create<GameState>((set, get) => ({
     cancelPath()
     set({ screen: 'menu' })
     useUI.setState({ panel: 'none', selectedDest: null, dialog: null })
+  },
+
+  setDream: (id) => {
+    const s = get()
+    const dream = AMBITION_BY_ID[id]
+    if (!s.profile || !dream || s.profile.dream === id) return
+    const d = draft(s)
+    d.profile = { ...d.profile!, dream: id }
+    let step = 0
+    while (step < dream.steps.length && dream.steps[step].test(d)) step++
+    d.dreamStep = step
+    toast(`${dream.emoji} New dream: ${dream.name}. ${step ? `${step} step${step === 1 ? '' : 's'} already behind you.` : 'Every journey starts somewhere.'}`, 'good')
+    set(d)
+  },
+
+  buyPet: (type, name) => {
+    const s = get()
+    const def = PETS[type]
+    const busy = busyReason(s)
+    if (busy) return toast(busy, 'warn')
+    if (s.pet) return toast(`You already have ${s.pet.name}. One pet at a time.`, 'warn')
+    const here = s.view === 'inside' ? s.insideDest : s.nearDest
+    if (here !== 'market') return toast('Pets are sold at Makola Market', 'warn')
+    if (s.money < def.price) return toast(`Need ${formatMoney(def.price - s.money)} more`, 'warn')
+    const d = draft(s)
+    spend(d, def.price, `Adopted: ${def.name}`, 'purchase')
+    const clean = name.trim().replace(/\s+/g, ' ').slice(0, 14) || PET_NAMES[Math.floor(Math.random() * PET_NAMES.length)]
+    d.pet = { type, name: clean, hunger: 80, happy: 80, clean: 80, health: 100, since: d.minutes }
+    showResult(d, `Meet ${clean}!`, def.emoji, [`Your new ${def.name.toLowerCase()} follows you everywhere.`, 'Feed, play and groom them from the Home tab. Neglect makes them sick.', def.perk], 'good')
+    set(d)
+  },
+
+  renamePet: (name) => {
+    const s = get()
+    const n = name.trim().replace(/\s+/g, ' ').slice(0, 14)
+    if (s.pet && n) set({ pet: { ...s.pet, name: n } })
+  },
+
+  rehomePet: () => {
+    const s = get()
+    if (!s.pet) return
+    toast(`${PETS[s.pet.type].emoji} ${s.pet.name} went to a loving new family.`, 'info')
+    set({ pet: null })
+  },
+
+  setPronouns: (p) => {
+    const s = get()
+    if (s.profile) set({ profile: { ...s.profile, pronouns: p } })
   },
 
   updateAppearance: (a) => {
@@ -1901,6 +2021,7 @@ export const useGame = create<GameState>((set, get) => ({
       spend(d, fee, `Laundering costs: ${b.name}`, 'fee')
       d.dirty = Math.max(0, d.dirty - amount + fee)
       d.dirty = Math.min(d.dirty, d.money)
+      d.stats = { ...d.stats, laundered: (d.stats.laundered ?? 0) + amount - fee }
       const prev = d.laundered[bizId!]
       d.laundered = { ...d.laundered, [bizId!]: { day, amount: (prev?.day === day ? prev.amount : 0) + amount } }
       if (Math.random() < LAUNDER.business.auditChance) {
@@ -1927,6 +2048,7 @@ export const useGame = create<GameState>((set, get) => ({
         spend(d, fee, 'Forex boys commission', 'fee')
         d.dirty = Math.max(0, Math.min(d.dirty - amount + fee, d.money))
         d.legal.heat = Math.min(100, d.legal.heat + 5)
+        d.stats = { ...d.stats, laundered: (d.stats.laundered ?? 0) + amount - fee }
         toast(`💱 Swapped through the forex boys: ${formatMoney(amount - fee)} clean (commission ${formatMoney(fee)}).`, 'good')
       }
     }
@@ -2244,8 +2366,9 @@ export const useGame = create<GameState>((set, get) => ({
       useUI.setState({ holdingUid: uid, holdRot: 0, selectedFurniture: null, editMode: true })
       return toast(`${def.emoji} Tap a green spot to place the ${def.name.toLowerCase()}. R rotates.`, 'info')
     }
-    toast(delivered ? `🚚 ${def.name} delivered. Drag it into place in Decorate mode.` : `🛒 Bought ${def.name}. Place it from your home's Decorate mode.`, 'good')
+    toast(delivered ? `🚚 ${def.name} delivered. Place it in your room.` : `🛒 Bought ${def.name}. Place it from Home → Decorate.`, 'good')
     set(d)
+    useUI.setState({ newItem: uid })
   },
 
   placeFurniture: (uid, x, y, rot) => {
@@ -2751,14 +2874,14 @@ export const useGame = create<GameState>((set, get) => ({
     if (!p.project) return toast('Choose what to build first', 'warn')
     const stage = projectStages(p.project)[p.stage]
     if (!stage) return
-    if (p.permit !== 'approved' && !withoutPermit) return toast('You need a building permit from the Lands Commission', 'warn')
+    if (p.permit !== 'approved' && !withoutPermit) return toast(p.permit === 'pending' ? `📜 The permit for ${DEST_BY_ID[plotId].name} is still being processed (ready Day ${dayOf(p.permitReady ?? s.minutes)}).` : `📜 ${DEST_BY_ID[plotId].name} needs a building permit. Apply at the Lands Commission in Ridge.`, 'warn')
     if (s.money < stage.price) return toast(`Need ${formatMoney(stage.price - s.money)} more for ${stage.name.toLowerCase()}`, 'warn')
     const d = draft(s)
     const dirtyMsg = needClean(d, stage.price)
     if (dirtyMsg) return toast(dirtyMsg, 'warn')
-    spend(d, stage.price, `Construction: ${stage.name}`, 'purchase', true)
+    spend(d, stage.price, `Construction: ${stage.name}, ${DEST_BY_ID[plotId].name}`, 'purchase', true)
     d.plots[plotId] = { ...p, until: d.minutes + stage.days * 1440, noPermit: p.noPermit || (withoutPermit && p.permit !== 'approved') }
-    toast(`${stage.emoji} Builders started the ${stage.name.toLowerCase()}. Ready in ${stage.days} day.`, 'good')
+    toast(`${stage.emoji} Builders started the ${stage.name.toLowerCase()} at ${DEST_BY_ID[plotId].name}. Ready in ${stage.days} day.`, 'good')
     set(d)
   },
 

@@ -21,7 +21,8 @@ function AvatarSvg({ a }: { a: Appearance }) {
   const outfit = OUTFITS[a.outfit] ?? OUTFITS[0]
   const st = outfit.style
   const acc = ACCESSORIES[a.accessory] ?? 'None'
-  const bw = [0.88, 1, 1.16][a.body ?? 1] ?? 1
+  const fem = (a.sex ?? 0) === 1
+  const bw = ([0.88, 1, 1.16][a.body ?? 1] ?? 1) * (fem ? 0.9 : 1)
   const W = (v: number) => 50 + (v - 50) * bw // widen around the centre line
   const bottom = st === 'jersey' ? '#f4f4f4' : outfit.bottom
   const shoe = st === 'sport' || st === 'jersey' ? '#f4f4f4' : '#2a2320'
@@ -80,8 +81,13 @@ function AvatarSvg({ a }: { a: Appearance }) {
           </g>
         )
       })}
-      {/* torso */}
-      <rect x={W(26)} y="46" width={48 * bw} height="44" rx="9" fill={main} />
+      {/* torso: hourglass for a female body */}
+      {fem ? (
+        <path d={`M${W(28)} 48 Q50 44 ${W(72)} 48 Q${W(70)} 58 ${W(66)} 68 Q${W(72)} 80 ${W(72)} 90 L${W(28)} 90 Q${W(28)} 80 ${W(34)} 68 Q${W(30)} 58 ${W(28)} 48 Z`} fill={main} />
+      ) : (
+        <rect x={W(26)} y="46" width={48 * bw} height="44" rx="9" fill={main} />
+      )}
+      {fem && <path d={`M${W(36)} 58 Q${W(42)} 64 50 60 Q${W(58)} 64 ${W(64)} 58`} stroke={shade(main, 0.75)} strokeWidth="1.4" fill="none" />}
       {st === 'smart' && (
         <>
           <path d="M44 46 L50 62 L56 46 Z" fill="#f4f4f4" />
@@ -146,9 +152,10 @@ function AvatarSvg({ a }: { a: Appearance }) {
       {acc === 'Glasses' && <><circle cx="43.5" cy="31" r="4.6" fill="none" stroke="#1b1b1b" strokeWidth="1.2" /><circle cx="56.5" cy="31" r="4.6" fill="none" stroke="#1b1b1b" strokeWidth="1.2" /><line x1="48" y1="31" x2="52" y2="31" stroke="#1b1b1b" strokeWidth="1.2" /></>}
       <path d="M49 33 Q50 38 47.5 38.5 M50.5 38.5 Q53 38 51 33" stroke={shade(skin, 0.72)} strokeWidth="1.1" fill="none" strokeLinecap="round" />
       <path d="M45 42 Q50 45.5 55 42" stroke={shade(skin, 0.6)} strokeWidth="2" fill="none" strokeLinecap="round" />
-      {(a.beard ?? 0) === 1 && <path d="M31 34 Q50 58 69 34 Q66 46 50 50 Q34 46 31 34Z" fill={hair} opacity="0.35" />}
-      {(a.beard ?? 0) === 2 && <><path d="M45 40.5 Q50 39 55 40.5" stroke={hair} strokeWidth="1.8" fill="none" /><ellipse cx="50" cy="48" rx="4" ry="3.5" fill={hair} /></>}
-      {(a.beard ?? 0) === 3 && <path d="M31 32 Q32 52 50 54 Q68 52 69 32 Q64 44 56 44 Q50 46 44 44 Q36 44 31 32Z" fill={hair} />}
+      {fem && <><path d="M40 29.5 l-1.5 -1.3 M47 29.5 l1.4 -1.3" stroke="#14100e" strokeWidth="1" strokeLinecap="round" /><path d="M53 29.5 l-1.4 -1.3 M60 29.5 l1.5 -1.3" stroke="#14100e" strokeWidth="1" strokeLinecap="round" /></>}
+      {!fem && (a.beard ?? 0) === 1 && <path d="M31 34 Q50 58 69 34 Q66 46 50 50 Q34 46 31 34Z" fill={hair} opacity="0.35" />}
+      {!fem && (a.beard ?? 0) === 2 && <><path d="M45 40.5 Q50 39 55 40.5" stroke={hair} strokeWidth="1.8" fill="none" /><ellipse cx="50" cy="48" rx="4" ry="3.5" fill={hair} /></>}
+      {!fem && (a.beard ?? 0) === 3 && <path d="M31 32 Q32 52 50 54 Q68 52 69 32 Q64 44 56 44 Q50 46 44 44 Q36 44 31 32Z" fill={hair} />}
       {acc === 'Headphones' && <><path d="M29 28 A21 23 0 0 1 71 28" stroke="#1c1a1a" strokeWidth="3" fill="none" /><rect x="25" y="26" width="7" height="11" rx="3" fill="#e0524a" /><rect x="68" y="26" width="7" height="11" rx="3" fill="#e0524a" /></>}
     </svg>
   )

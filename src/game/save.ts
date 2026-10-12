@@ -1,5 +1,5 @@
 import { BALANCE, GAME_CONFIG, clamp } from './config'
-import { CAREERS, DEST_BY_ID, EVENTS, FURNITURE, HOMES, ILLNESSES, OFFICERS, OUTDOOR_KINDS, PLOT_BY_ID, PROJECTS, homeDestId } from './content'
+import { CAREERS, DEST_BY_ID, EVENTS, FURNITURE, HOMES, ILLNESSES, OFFICERS, OUTDOOR_KINDS, PETS, PLOT_BY_ID, PROJECTS, homeDestId } from './content'
 import { freshGame, useGame, type SavedGame } from './store'
 import { MAP_H, MAP_W, walkable } from './world'
 import type { NeedId, Profile } from './types'
@@ -17,7 +17,7 @@ export interface SaveEnvelope {
 const SAVE_KEYS: (keyof SavedGame)[] = [
   'profile', 'minutes', 'money', 'needs', 'skills', 'careers', 'employment', 'housing', 'inventory', 'friendships',
   'transactions', 'player', 'view', 'insideDest', 'viewing', 'tutorial', 'stats', 'daily', 'activity', 'event', 'result', 'eventCooldownUntil',
-  'rentWarnedFor', 'lowFlags', 'nextId', 'health', 'legal', 'romance', 'edu', 'owned', 'plots', 'license', 'vehicles', 'rentedDay', 'upgrades', 'rentedOut', 'tenants', 'dirty', 'rep', 'laundered', 'homeStyle', 'bank',
+  'rentWarnedFor', 'lowFlags', 'nextId', 'health', 'legal', 'romance', 'edu', 'owned', 'plots', 'license', 'vehicles', 'rentedDay', 'upgrades', 'rentedOut', 'tenants', 'dirty', 'rep', 'laundered', 'dreamStep', 'pet', 'homeStyle', 'bank',
   'invest', 'tasks', 'today', 'goals', 'goalsActive', 'lifeFlags', 'visited', 'chats', 'chatUnread', 'chatDay', 'groups', 'loan', 'credit', 'items', 'ticket', 'businesses',
 ]
 
@@ -140,6 +140,11 @@ function sanitize(raw: unknown): SavedGame {
   out.goalsActive = Array.isArray(g.goalsActive) ? g.goalsActive.filter((k: unknown) => typeof k === 'string') : []
   out.lifeFlags = obj(g.lifeFlags) ? Object.fromEntries(Object.entries<unknown>(g.lifeFlags).filter(([, v]) => isNum(v))) as Record<string, number> : {}
   out.rentedOut = Array.isArray(g.rentedOut) ? g.rentedOut.filter((k: unknown) => typeof k === 'string') : []
+  const pt = g.pet
+  out.pet = obj(pt) && typeof pt.type === 'string' && pt.type in PETS && typeof pt.name === 'string'
+    ? { type: pt.type as keyof typeof PETS, name: pt.name.slice(0, 14), hunger: isNum(pt.hunger) ? clamp(pt.hunger) : 80, happy: isNum(pt.happy) ? clamp(pt.happy) : 80, clean: isNum(pt.clean) ? clamp(pt.clean) : 80, health: isNum(pt.health) ? clamp(pt.health) : 100, since: isNum(pt.since) ? pt.since : 0 }
+    : null
+  out.dreamStep = isNum(g.dreamStep) ? Math.max(0, Math.floor(g.dreamStep)) : 0
   out.dirty = isNum(g.dirty) ? Math.max(0, Math.min(g.dirty, out.money)) : 0
   // older saves: give illegal workers the street cred their job implies
   const illegalJob = !!(out.employment && CAREERS[out.employment]?.illegal)

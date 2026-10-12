@@ -17,7 +17,8 @@ function Toggle({ label, hint, value, onChange }: { label: string; hint?: string
   )
 }
 
-export function SettingsPanel() {
+/** `onClose`: the start menu shows settings outside the game panels and closes them itself. */
+export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
   const st = useUI((s) => s.settings)
   const set = (p: Partial<Settings>) => {
     useUI.getState().setSettings(p)
@@ -27,7 +28,7 @@ export function SettingsPanel() {
   const [saved, setSaved] = useState<string | null>(null)
   const game = useGame.getState()
   return (
-    <Sheet title="Settings" icon="⚙️" onClose={() => useUI.getState().setPanel('none')} subtitle="The game is paused while this is open.">
+    <Sheet title="Settings" icon="⚙️" onClose={onClose ?? (() => useUI.getState().setPanel('none'))} subtitle={onClose ? undefined : 'The game is paused while this is open.'}>
       <h3>🔊 Audio</h3>
       <label className="slider"><b>Master volume</b><input type="range" min={0} max={1} step={0.05} value={st.master} onChange={(e) => set({ master: Number(e.target.value) })} aria-label="Master volume" /></label>
       <Toggle label="Sound effects" value={st.sfx} onChange={(sfx) => set({ sfx })} />

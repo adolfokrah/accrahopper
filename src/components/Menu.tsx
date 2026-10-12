@@ -70,9 +70,8 @@ export function Menu() {
         </Modal>
       )}
       {settings && (
-        <div className="menu-settings">
-          <SettingsPanel />
-          <button className="menu-settings-close btn ghost" onClick={() => setSettings(false)}>Close</button>
+        <div className="menu-settings" onClick={(e) => { if (e.target === e.currentTarget) setSettings(false) }}>
+          <SettingsPanel onClose={() => setSettings(false)} />
         </div>
       )}
     </div>

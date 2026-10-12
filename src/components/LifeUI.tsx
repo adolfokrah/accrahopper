@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { sfx } from '@/game/audio'
 import { dayOf, formatClock, formatDuration, formatMoney } from '@/game/config'
 import { DEST_BY_ID, ILLNESSES, LEGAL, RIDES, type RideMode, VEHICLES } from '@/game/content'
-import { GOALS, GOAL_BY_ID, TASK_BY_ID, rideQuote, taskProgress, trotroPlan, walkMinutes } from '@/game/life'
+import { GOALS, GOAL_BY_ID, TASK_BY_ID, rideQuote, taskProgress, trotroPlan, walkMinutes, AMBITION_BY_ID, AMBITIONS, DREAM_REWARDS } from '@/game/life'
 import { takeTrotro, walkToDest } from '@/game/nav'
 import { useGame, myCar } from '@/game/store'
 import { useUI } from '@/game/ui'
@@ -136,6 +136,48 @@ export function TasksCard() {
 }
 
 /** Your life goals right now, then what you have already achieved. They change as your life does. */
+/** Your dream in life: its steps, and a way to pick another one when life changes. */
+export function DreamCard() {
+  const s = useGame()
+  const [picking, setPicking] = useState(false)
+  const dream = s.profile?.dream ? AMBITION_BY_ID[s.profile.dream] : undefined
+  return (
+    <div className="dream-card">
+      {dream ? (
+        <>
+          <div className="row between">
+            <b>{dream.emoji} {dream.name}</b>
+            <small className="muted">{Math.min(s.dreamStep, dream.steps.length)}/{dream.steps.length}</small>
+          </div>
+          <ol className="dream-steps">
+            {dream.steps.map((st, i) => (
+              <li key={i} className={i < s.dreamStep ? 'done' : i === s.dreamStep ? 'now' : ''}>
+                <span>{i < s.dreamStep ? '✅' : i === s.dreamStep ? '👉' : '🔒'}</span>
+                <b>{st.text}</b>
+                <small>{i < s.dreamStep ? 'Done' : `+${formatMoney(DREAM_REWARDS[Math.min(i, DREAM_REWARDS.length - 1)])}`}</small>
+              </li>
+            ))}
+          </ol>
+        </>
+      ) : (
+        <b>🌟 You have no dream yet. Pick one below.</b>
+      )}
+      <button className="btn soft small" onClick={() => { sfx('click'); setPicking(!picking) }}>{picking ? 'Close' : dream ? '🔄 Change my dream' : 'Choose a dream'}</button>
+      {picking && (
+        <div className="dream-pick">
+          {AMBITIONS.filter((a) => a.id !== dream?.id).map((a) => (
+            <button key={a.id} className="choice" onClick={() => { useGame.getState().setDream(a.id); setPicking(false) }}>
+              <b>{a.emoji} {a.name}</b>
+              <small>{a.blurb}</small>
+            </button>
+          ))}
+          <small className="muted">Steps you have already reached count straight away (no rewards for those).</small>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function LifeGoalsList() {
   const s = useGame()
   const active = s.goalsActive.map((id) => GOAL_BY_ID[id]).filter(Boolean)

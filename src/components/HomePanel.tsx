@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { activitiesForFurniture } from '@/game/activities'
 import { BALANCE, formatMoney } from '@/game/config'
@@ -11,6 +11,7 @@ import { landlordName, useGame } from '@/game/store'
 import { useUI } from '@/game/ui'
 import { ActivityList, RentOutBtn } from './BuildingPanel'
 import { Catalogue } from './Catalogue'
+import { PetCard } from './Pets'
 import { Btn, Chip, Sheet } from './kit'
 
 function Outside() {
@@ -37,8 +38,9 @@ function Outside() {
       {homeless ? null : near ? (
         <Btn onClick={() => useGame.getState().enterHome()} disabled={!!s.activity}>🚪 Enter home</Btn>
       ) : (
-        <Btn onClick={() => { walkToDest(homeDestId(s)); useUI.getState().setPanel('none') }} disabled={!!s.activity}>🚶 Walk home</Btn>
+        <Btn onClick={() => { walkToDest(homeDestId(s)); useUI.getState().setPanel('none') }} disabled={!!s.activity}>🏠 Go home</Btn>
       )}
+      <PetCard />
       <b>Compare housing</b>
       <div className="compare">
         {HOME_TIERS.map((t) => {
@@ -136,14 +138,14 @@ function HomeUpgrades() {
 }
 
 /** Floating Move / Rotate / Store bar for the selected or held piece in Decorate mode. */
-function DecoBar() {
+export function DecoBar() {
   const s = useGame()
   const edit = useUI((u) => u.editMode)
   const selected = useUI((u) => u.selectedFurniture)
   const holdingUid = useUI((u) => u.holdingUid)
   const dragUid = useUI((u) => u.dragUid)
   const holdRot = useUI((u) => u.holdRot)
-  if (!edit) return null
+  if (!edit || s.view !== 'home' || s.viewing) return null
   const items = itemsInHome(s.housing.tier, s.inventory)
   const heldId = holdingUid ?? dragUid
   const held = heldId !== null ? items.find((i) => i.id === heldId) ?? s.inventory.map((o) => ({ id: o.uid, type: o.type, fixture: false })).find((o) => o.id === heldId) : undefined
@@ -162,7 +164,11 @@ function DecoBar() {
       ) : (
         sel && (
           <>
-            <button onClick={() => useUI.setState({ holdingUid: sel.id, holdRot: sel.rot, selectedFurniture: null })}>✋ Move</button>
+            <button onClick={() => {
+              useUI.setState({ holdingUid: sel.id, holdRot: sel.rot, selectedFurniture: null })
+              // phones: fold the sheet so the whole room is free to tap
+              if (window.innerWidth < 760) useUI.setState({ panel: 'none' })
+            }}>✋ Move</button>
             <button onClick={() => {
               sfx('click')
               if (!useGame.getState().placeFurniture(sel.id, sel.x, sel.y, sel.rot === 0 ? 1 : 0)) useUI.setState({ holdingUid: sel.id, holdRot: sel.rot === 0 ? 1 : 0, selectedFurniture: null })
@@ -199,7 +205,22 @@ function Inside() {
   }, [])
 
   const setEdit = (v: boolean) => useUI.setState({ editMode: v, selectedFurniture: null, holdingUid: null })
-  const hold = (uid: number) => useUI.setState({ holdingUid: uid, holdRot: 0, selectedFurniture: null, editMode: true })
+  const newItem = useUI((u) => u.newItem)
+  const newRef = useRef<HTMLLIElement>(null)
+  const storageRef = useRef<HTMLElement>(null)
+  const coarse = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches
+  // something new arrived: open Decorate and bring it into view
+  useEffect(() => {
+    if (newItem === null || !s.inventory.some((o) => o.uid === newItem && !o.placed)) return
+    if (!edit) useUI.setState({ editMode: true })
+    const t = setTimeout(() => newRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 120)
+    return () => clearTimeout(t)
+  }, [newItem, edit]) // eslint-disable-line react-hooks/exhaustive-deps
+  const hold = (uid: number) => {
+    useUI.setState({ holdingUid: uid, holdRot: 0, selectedFurniture: null, editMode: true, newItem: null })
+    // phones: fold the sheet so the room is free to tap
+    if (window.innerWidth < 760) useUI.setState({ panel: 'none' })
+  }
 
   return (
     <Sheet
@@ -217,6 +238,7 @@ function Inside() {
 
       {!edit && (
         <>
+          {!sel && <PetCard />}
           {!sel && <p className="blurb">Tap any furniture in the room to use it: beds, showers, kitchen, sofa, TV, bar, piano and more.</p>}
           {sel && (
             <>
@@ -233,7 +255,6 @@ function Inside() {
 
       {edit && (
         <>
-          <DecoBar />
           <p className="blurb">Drag any piece (even the bed) to move it. Tap a piece for Move, Rotate and Store. Press R while moving to rotate. New furniture is delivered to storage below.</p>
           {holding && <small className="muted">Placing {FURNITURE[holding.type].emoji} {FURNITURE[holding.type].name}: tap a green spot in the room.</small>}
           <b>🛒 Furniture showroom <small className="muted">· delivered, +GH₵20</small></b>
@@ -254,18 +275,40 @@ function Inside() {
             })}
           </div>
           <HomeUpgrades />
-          <b>In storage ({stored.length})</b>
+          <b ref={storageRef}>In storage ({stored.length})</b>
           {stored.length === 0 && <small className="muted">Nothing in storage. Buy furniture at Makola Market.</small>}
           <ul className="inv">
-            {stored.map((o) => (
-              <li key={o.uid}>
-                <span>{FURNITURE[o.type].emoji} {FURNITURE[o.type].name}</span>
-                <span className="row">
-                  <Btn small onClick={() => { hold(o.uid); sfx('click') }}>Place</Btn>
-                  <Btn small kind="ghost" onClick={() => { sfx('coin'); useGame.getState().sellFurniture(o.uid) }}>Sell {formatMoney(sellPrice(o.type))}</Btn>
-                </span>
-              </li>
-            ))}
+            {stored.map((o) => {
+              const fresh = o.uid === newItem
+              return (
+                <li
+                  key={o.uid}
+                  ref={fresh ? newRef : undefined}
+                  className={`stored ${fresh ? 'fresh' : ''}`}
+                  title="Drag onto the room to place it"
+                  onPointerDown={(e) => {
+                    // mouse: drag straight from the list onto the room (touch uses tap-to-place)
+                    if (e.pointerType !== 'mouse' || (e.target as HTMLElement).closest('button')) return
+                    useUI.setState({ dragUid: o.uid, holdRot: 0, selectedFurniture: null, editMode: true, newItem: null })
+                  }}
+                >
+                  <span className="stored-main">
+                    <span>{FURNITURE[o.type].emoji} {FURNITURE[o.type].name}{fresh && <i className="new-pill">New</i>}</span>
+                    <span className="row">
+                      <Btn small onClick={() => { hold(o.uid); sfx('click') }}>{fresh ? '📍 Place it now' : 'Place'}</Btn>
+                      <Btn small kind="ghost" onClick={() => { sfx('coin'); useGame.getState().sellFurniture(o.uid) }}>Sell {formatMoney(sellPrice(o.type))}</Btn>
+                    </span>
+                  </span>
+                  {fresh && (
+                    <ol className="place-tips">
+                      <li><b>Tap “Place it now”</b>, then tap a <span className="ok">green spot</span> in your room.</li>
+                      <li>Or <b>drag it</b> from this list onto the room{coarse ? ' (with a mouse)' : ''}.</li>
+                      <li>Press <b>↻ Rotate</b> (or R) to turn it. Red means it does not fit there.</li>
+                    </ol>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         </>
       )}

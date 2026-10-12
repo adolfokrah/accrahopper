@@ -13,7 +13,7 @@ import { useUI, type PanelId } from '@/game/ui'
 import { NEED_IDS, type NeedId } from '@/game/types'
 import { BuildingPanel } from './BuildingPanel'
 import { CharacterPanel } from './CharacterPanel'
-import { HomePanel } from './HomePanel'
+import { DecoBar, HomePanel } from './HomePanel'
 import { Btn, Chip, Meter, Modal } from './kit'
 import { RobPrompt } from './RobPrompt'
 import { PhonePanel } from './Phone'
@@ -69,7 +69,7 @@ function ObjectiveCard() {
             <div className="obj-progress">
               <Meter value={o.progress.cur} max={o.progress.total} tone="blue" label={o.progress.label} />
               <small>
-                {o.progress.label}: {o.progress.label === 'Career XP' ? `${Math.round(o.progress.cur)}/${o.progress.total}` : `${formatMoney(o.progress.cur)} / ${formatMoney(o.progress.total)}`}
+                {o.progress.label}: {['Net worth', 'Laundered', 'Savings', 'Rent fund', 'Move-in cost'].includes(o.progress.label) ? `${formatMoney(o.progress.cur)} / ${formatMoney(o.progress.total)}` : `${Math.round(o.progress.cur)}/${o.progress.total}`}
               </small>
             </div>
           )}
@@ -503,7 +503,8 @@ export function HUD() {
   const selectedDest = useUI((s) => s.selectedDest)
   useEffect(() => {
     const mobile = window.innerWidth < 760
-    runtime.uiShift = panel !== 'none' && mobile && view === 'world' ? window.innerHeight * 0.2 : 0
+    // phones: lift the scene above an open sheet (rooms more, so furniture stays reachable)
+    runtime.uiShift = panel !== 'none' && panel !== 'phone' && mobile ? window.innerHeight * (view === 'world' ? 0.2 : 0.24) : 0
     return () => { runtime.uiShift = 0 }
   }, [panel, view])
   return (
@@ -523,13 +524,14 @@ export function HUD() {
       </div>
       <NavBar />
       {panel === 'phone' && <PhonePanel />}
-      <div className={`panel-slot ${panel !== 'none' && panel !== 'phone' ? 'open' : ''}`}>
+      <div className={`panel-slot panel-${panel} ${panel !== 'none' && panel !== 'phone' ? 'open' : ''}`}>
         {panel === 'building' && selectedDest && <BuildingPanel key={selectedDest} />}
         {panel === 'character' && <CharacterPanel />}
         {panel === 'home' && <HomePanel />}
         {panel === 'settings' && <SettingsPanel />}
       </div>
       <MinimizedPanel />
+      <DecoBar />
       <PartyFX />
       <Fade />
       <Toasts />

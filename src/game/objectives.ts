@@ -1,3 +1,4 @@
+import { AMBITION_BY_ID } from './life'
 import { formatMoney, hourOf } from './config'
 import { CAREERS, DEST_BY_ID, HOMES, homeDestId } from './content'
 import { missingRequirements, type GameState } from './store'
@@ -21,7 +22,9 @@ export function getObjective(s: GameState): Objective {
     const t = s.tutorial.step
     const base = { kind: 'tutorial' as const, step: t + 1, steps: TUTORIAL_STEPS }
     switch (t) {
-      case 0: return { ...base, title: "Walk to Auntie Esi's Chop Bar", detail: 'Tap the ground to walk, or use WASD. Drag to pan the camera.', destId: 'foodstall' }
+      case 0: return s.view === 'home'
+        ? { ...base, title: 'Step outside', detail: 'You wake up in your room. Tap the green 🚪 Exit mat by the door (or tap World) to go out into Accra.' }
+        : { ...base, title: "Walk to Auntie Esi's Chop Bar", detail: 'Tap the ground to walk, or use WASD. Drag to pan the camera.', destId: 'foodstall' }
       case 1: return { ...base, title: 'Buy and eat a meal', detail: 'Go inside, pick a dish and confirm. Kelewele is cheapest.', destId: 'foodstall' }
       case 2: return { ...base, title: 'Apply for a starter job', detail: 'Makola Market is hiring Shop Assistants. No experience needed.', destId: 'market' }
       case 3: return { ...base, title: 'Complete a shift', detail: 'Go to your workplace, press ▶ Start shift, then do the tasks that pop up to earn wages and tips.', destId: s.employment ? CAREERS[s.employment].workplace : 'market' }
@@ -61,6 +64,23 @@ export function getObjective(s: GameState): Objective {
   const dueIn = s.housing.nextRentDue - s.minutes
   if (rent > 0 && dueIn < 48 * 60 && s.money < rent) {
     return { kind: 'urgent', title: `Save for rent: ${formatMoney(rent)}`, detail: `Due in ${Math.max(1, Math.round(dueIn / 60))}h. You have ${formatMoney(s.money)}.`, destId: s.employment ? CAREERS[s.employment].workplace : 'market', progress: { cur: s.money, total: rent, label: 'Rent fund' } }
+  }
+  // situations that take over until they are dealt with
+  if (s.loan && s.minutes > s.loan.due) {
+    return { kind: 'urgent', title: `Repay your loan (${formatMoney(s.loan.owed)})`, detail: 'It is overdue: it grows 1% a day and wrecks your credit. Repay in Phone → MoMo.' }
+  }
+  if (s.legal.heat >= 60) {
+    return { kind: 'urgent', title: 'Lie low: the police are watching', detail: `Police heat ${Math.round(s.legal.heat)}. Stop crime for a while; heat falls each day. Neighbourhood watch at the police station clears your name faster.`, destId: 'police' }
+  }
+  if (s.dirty >= 2000) {
+    return { kind: 'goal', title: `Clean ${formatMoney(s.dirty)} of dirty cash`, detail: 'Police seize unexplained cash. Launder it through a business or the Makola forex boys (Phone → MoMo).', destId: 'market' }
+  }
+  // your dream in life drives everything else
+  const dream = s.profile?.dream ? AMBITION_BY_ID[s.profile.dream] : undefined
+  if (dream && s.dreamStep < dream.steps.length) {
+    const st = dream.steps[s.dreamStep]
+    const tip = !s.employment && dream.id !== 'kingpin' && dream.id !== 'family' ? ' Tip: a job keeps money coming in.' : ''
+    return { kind: 'goal', title: `${dream.emoji} ${st.text}`, detail: `Dream: ${dream.name} · step ${s.dreamStep + 1}/${dream.steps.length}. ${st.hint}${tip}`, destId: st.dest, progress: st.progress?.(s) }
   }
   if (!s.employment) return { kind: 'goal', title: 'Get a job', detail: 'Pick a career in your phone and apply at its workplace.', destId: 'market' }
   const c = CAREERS[s.employment]
