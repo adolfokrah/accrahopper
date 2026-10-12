@@ -15,6 +15,7 @@ import { BuildingPanel } from './BuildingPanel'
 import { CharacterPanel } from './CharacterPanel'
 import { HomePanel } from './HomePanel'
 import { Btn, Chip, Meter, Modal } from './kit'
+import { RobPrompt } from './RobPrompt'
 import { PhonePanel } from './Phone'
 import { SettingsPanel } from './SettingsPanel'
 import { CourtModal, StatusChips, TaskList, TravelSheet } from './LifeUI'
@@ -39,7 +40,7 @@ function TopBar() {
   const h = hourOf(minutes)
   const night = h < 6 || h >= 19
   const rentIn = housing.nextRentDue - minutes
-  const rentChip = housing.overdueSince !== null ? 'Rent overdue!' : rentIn < 48 * 60 ? `Rent in ${Math.max(1, Math.ceil(rentIn / 1440))}d` : null
+  const rentChip = housing.homeless ? 'Homeless' : housing.overdueSince !== null ? 'Notice to quit!' : rentIn < 48 * 60 ? `Rent in ${Math.max(1, Math.ceil(rentIn / 1440))}d` : null
   const rent = HOMES[housing.tier].rent
   return (
     <div className="topbar">
@@ -56,8 +57,8 @@ function TopBar() {
       <NeedsBar />
       <div className="topbar-right">
         {rentChip && (
-          <button className={`card pill rentchip ${housing.overdueSince !== null || money < rent ? 'bad' : ''}`} onClick={() => { useUI.setState({ phoneTab: 'wallet' }); useUI.getState().setPanel('phone') }}>
-            🏠 {rentChip}
+          <button className={`card pill rentchip ${housing.homeless || housing.overdueSince !== null || money < rent ? 'bad' : ''}`} onClick={() => { if (housing.homeless) return useUI.getState().setPanel('home'); useUI.setState({ phoneTab: 'wallet' }); useUI.getState().setPanel('phone') }}>
+            {housing.homeless ? '🧳' : '🏠'} {rentChip}
           </button>
         )}
         <button className="card pill money" onClick={() => { useUI.setState({ phoneTab: 'wallet' }); useUI.getState().setPanel('phone') }} aria-label="Wallet">
@@ -584,13 +585,16 @@ function fxFor(a: { uid: number; defId: string; shift?: { current?: { key: strin
 }
 /** Cedi notes flying when you spray money, champagne and sparklers when a bottle is popped. */
 function PartyFX() {
-  const fx = useGame((s) => fxFor(s.activity as never))
+  // select a string, not an object: a fresh object every render loops forever
+  const key = useGame((s) => {
+    const fx = fxFor(s.activity as never)
+    return fx ? `${fx.kind}|${fx.key}` : ''
+  })
   const reduce = useUI((s) => s.settings.reduceMotion)
   const [bits, setBits] = useState<FxBit[]>([])
-  const key = fx ? `${fx.kind}|${fx.key}` : ''
   useEffect(() => {
-    if (!fx) return
-    const kind = fx.kind
+    if (!key) return
+    const kind = key.split('|')[0] as FxKind
     const scale = reduce ? 0.35 : 1
     const rnd = (a: number, b: number) => a + Math.random() * (b - a)
     const burst = () => {
@@ -677,6 +681,7 @@ export function HUD() {
       <Fade />
       <Toasts />
       <EventModal />
+      <RobPrompt />
       <DialogModal />
       <TravelSheet />
       <IntimacyOverlay />

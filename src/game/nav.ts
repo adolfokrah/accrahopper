@@ -1,7 +1,7 @@
 import { DEST_BY_ID, OUTDOOR_KINDS, homeDestId } from './content'
 import { trotroPlan } from './life'
 import { goToTile, runtime } from './runtime'
-import { useGame } from './store'
+import { busyReason, useGame } from './store'
 import { useUI } from './ui'
 import { nearestWalkable } from './world'
 
@@ -33,7 +33,7 @@ export function walkToDest(id: string, enter = true, walkOnly = false, onArrive?
   let s = useGame.getState()
   const d = DEST_BY_ID[id]
   if (!d) return
-  if (s.activity) return useUI.getState().toast('Finish your current activity first', 'warn')
+  if (busyReason(s)) return useUI.getState().toast(busyReason(s)!, 'warn')
   if (!walkOnly && s.nearDest !== id && s.insideDest !== id && tilesTo(id) > 14) {
     useUI.setState({ travelTo: id })
     return
@@ -62,7 +62,7 @@ export function walkToDest(id: string, enter = true, walkOnly = false, onArrive?
 export function takeTrotro(destId: string) {
   const s = useGame.getState()
   const toast = useUI.getState().toast
-  if (s.activity) return toast('Finish your current activity first', 'warn')
+  if (busyReason(s)) return toast(busyReason(s)!, 'warn')
   const plan = trotroPlan(s, destId)
   if (!plan) return toast('No trotro goes there from here. Walk or take a taxi.', 'info')
   if (s.money < plan.ride.fare) return toast(`The trotro fare is ${plan.ride.fare} cedis`, 'warn')
@@ -80,7 +80,7 @@ export function takeTrotro(destId: string) {
 
 export function walkToPoint(x: number, z: number) {
   const s = useGame.getState()
-  if (s.activity) return useUI.getState().toast('Finish your current activity first', 'warn')
+  if (busyReason(s)) return useUI.getState().toast(busyReason(s)!, 'warn')
   if (s.view !== 'world') return
   const t = nearestWalkable(Math.floor(x), Math.floor(z), 6)
   if (!t) return

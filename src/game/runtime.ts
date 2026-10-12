@@ -21,6 +21,11 @@ export const runtime = {
   },
   /** Walk target inside rooms and buildings (local room coordinates). */
   insideTarget: null as { x: number; z: number } | null,
+  /** Set while the player is held (police, arrest, custody): no walking. */
+  frozen: false,
+  /** Live positions of pedestrians and patrolling police (world tiles). */
+  peds: [] as { x: number; z: number; cop?: boolean }[],
+  cops: [] as { x: number; z: number }[],
   hoverDest: null as string | null,
   /** Pixels the world is shifted up so mobile bottom sheets do not cover the character. */
   uiShift: 0,
@@ -44,6 +49,7 @@ export function rotateCam(dir: 1 | -1) {
 }
 /** Camera-relative movement vector from WASD/arrow keys (unit length or zero). */
 export function keyVector(): { x: number; z: number } {
+  if (runtime.frozen) return { x: 0, z: 0 }
   const k = runtime.keys
   const ix = (k.right ? 1 : 0) - (k.left ? 1 : 0)
   const iz = (k.up ? 1 : 0) - (k.down ? 1 : 0)

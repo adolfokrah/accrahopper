@@ -11,7 +11,7 @@ import { Character, type Motion, type Pose, type Prop } from './Character'
 import { lookFor } from './poses'
 import { CarModel } from './Ambient'
 import { formatMoney } from '@/game/config'
-import { Part, Walls, actionFocus, windowMat } from './shared'
+import { Merged, Part, Walls, actionFocus, windowMat } from './shared'
 import { keyVector, runtime } from '@/game/runtime'
 import { Label, TextPlane } from './Label'
 
@@ -1020,6 +1020,8 @@ function Room({ destId, layout }: { destId: string; layout: Layout }) {
   const profile = useGame((s) => s.profile)
   const hookup = useGame((s) => s.hookup)
   const dialog = useUI((s) => s.dialog)
+  // props such as the arena show change by day: rebuild the batched meshes then
+  const day = useGame((s) => dayOf(s.minutes))
   const { w, d, Props } = layout
   const player = useRef<THREE.Group>(null)
   const staffRef = useRef<THREE.Group>(null)
@@ -1147,14 +1149,14 @@ function Room({ destId, layout }: { destId: string; layout: Layout }) {
         rotation-x={-Math.PI / 2}
         onClick={(e) => {
           if (e.delta > 6) return
-          runtime.insideTarget = { x: Math.min(w - 0.3, Math.max(0.3, e.point.x - INSIDE_ORIGIN.x)), z: Math.min(d - 0.2, Math.max(0.3, e.point.z - INSIDE_ORIGIN.z)) }
+          if (!runtime.frozen) runtime.insideTarget = { x: Math.min(w - 0.3, Math.max(0.3, e.point.x - INSIDE_ORIGIN.x)), z: Math.min(d - 0.2, Math.max(0.3, e.point.z - INSIDE_ORIGIN.z)) }
         }}
       >
         <planeGeometry args={[w, d]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
       {layout.dark && <pointLight position={[w / 2, 3, d / 2 + 1]} intensity={10} distance={18} color="#9b7bff" />}
-      <Props />
+      <Merged k={`${destId}:${day}`}><Props /></Merged>
 
       {/* exit */}
       <group

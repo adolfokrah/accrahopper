@@ -57,6 +57,29 @@ export type FurnitureType =
   | 'fan'
   | 'coalpot'
   | 'stove'
+  | 'bed_luxury'
+  | 'armchair'
+  | 'coffee_table'
+  | 'sectional'
+  | 'rug'
+  | 'floor_lamp'
+  | 'dining_set'
+  | 'wardrobe'
+  | 'vanity'
+  | 'espresso'
+  | 'kitchen_island'
+  | 'bathtub'
+  | 'jacuzzi'
+  | 'orchid'
+  | 'gold_mirror'
+  | 'sculpture'
+  | 'aquarium'
+  | 'bar_cabinet'
+  | 'piano'
+  | 'console'
+  | 'home_cinema'
+  | 'treadmill'
+  | 'massage_chair'
   | 'wall'
   | 'wall_long'
   | 'wall_half'
@@ -158,6 +181,10 @@ export interface ActivityContext {
   ride?: 'trotro' | 'taxi' | 'ride' | 'okada' | 'pragia'
   /** Driving-job trip (you are the driver). */
   drive?: boolean
+  /** Street crime against a passer-by. */
+  street?: boolean
+  /** Police officers on patrol close by when the crime started. */
+  cops?: number
 }
 
 export interface ActiveActivity {
@@ -254,5 +281,5 @@ export type Officer = 'greedy' | 'cautious' | 'honest'
 
 export interface ActiveEvent {
   id: string
-  ctx: { travelTo?: string; npc?: string; plot?: string; officer?: Officer; offence?: string }
+  ctx: { travelTo?: string; npc?: string; plot?: string; officer?: Officer; offence?: string; lease?: string }
 }

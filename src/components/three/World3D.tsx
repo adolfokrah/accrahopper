@@ -7,7 +7,7 @@ import { hourOf } from '@/game/config'
 import { findMyCharacter, walkToPoint } from '@/game/nav'
 import { camBasis, runtime, setZoom, turnCam, zoomBy } from '@/game/runtime'
 import { useGame } from '@/game/store'
-import { QUALITY, useUI } from '@/game/ui'
+import { QUALITY_ORDER, QUALITY, useUI } from '@/game/ui'
 import { MAP_H, MAP_W } from '@/game/world'
 import { extCount, homeLayout } from '@/game/home'
 import { Pedestrians, Traffic, TrafficLights } from './Ambient'
@@ -373,7 +373,11 @@ function Npcs() {
   const showLabels = useUI((s) => s.settings.showLabels)
   const refs = useRef<(THREE.Group | null)[]>([])
   const screen = useGame((s) => s.screen)
+  // phones: simpler NPC bodies and a shorter draw distance
+  const light = useUI((s) => s.settings.quality === 'low' || s.settings.quality === 'minimal')
+  const range = light ? 28 : 40
   useFrame((_, dt) => {
+    if (useGame.getState().view !== 'world') return
     NPCS.forEach((n, i) => {
       const g = refs.current[i]
       if (!g) return
@@ -386,7 +390,7 @@ function Npcs() {
       while (diff > Math.PI) diff -= Math.PI * 2
       while (diff < -Math.PI) diff += Math.PI * 2
       g.rotation.y += diff * Math.min(1, dt * 4)
-      g.visible = Math.hypot(g.position.x - viewCenter.x, g.position.z - viewCenter.z) < 40
+      g.visible = Math.hypot(g.position.x - viewCenter.x, g.position.z - viewCenter.z) < range
       void d
     })
   })
@@ -409,7 +413,7 @@ function Npcs() {
             onPointerOver={() => { document.body.style.cursor = 'pointer' }}
             onPointerOut={() => { document.body.style.cursor = '' }}
           >
-            <Character appearance={n.appearance} getMotion={() => motion.current} />
+            <Character appearance={n.appearance} lite={light} getMotion={() => motion.current} />
             <mesh position={[0, 0.6, 0]} visible={false}>
               <boxGeometry args={[0.7, 1.4, 0.7]} />
             </mesh>
@@ -468,9 +472,11 @@ function GroundPicker() {
 function PerfMonitor() {
   const setDpr = useThree((s) => s.setDpr)
   const q = useUI((s) => QUALITY[s.settings.quality])
-  const st = useRef({ frames: 0, time: 0, dpr: Math.min(q.dpr[1], typeof window !== 'undefined' ? window.devicePixelRatio : 1) })
+  const st = useRef({ frames: 0, time: 0, slow: 0, warm: 0, dpr: Math.min(q.dpr[1], typeof window !== 'undefined' ? window.devicePixelRatio : 1) })
   useEffect(() => {
     st.current.dpr = Math.min(q.dpr[1], window.devicePixelRatio || 1)
+    st.current.slow = 0
+    st.current.warm = 0
   }, [q])
   useFrame((_, dt) => {
     const s = st.current
@@ -489,6 +495,16 @@ function PerfMonitor() {
     if (Math.abs(next - s.dpr) > 0.01) {
       s.dpr = next
       setDpr(next)
+    }
+    // still slow at the lowest resolution: step the auto quality down (skip the first seconds while things load)
+    s.warm++
+    const ui = useUI.getState()
+    if (s.warm > 3 && fps < 22 && s.dpr <= min + 0.01 && ui.settings.qualityAuto && document.visibilityState === 'visible') s.slow++
+    else s.slow = 0
+    if (s.slow >= 2) {
+      const i = QUALITY_ORDER.indexOf(ui.settings.quality)
+      if (i >= 0 && i < QUALITY_ORDER.length - 1) ui.setSettings({ quality: QUALITY_ORDER[i + 1] })
+      s.slow = 0
     }
   })
   return null
@@ -516,7 +532,7 @@ function WorldContent() {
         <ClickMarker />
         <GroundPicker />
       </group>
-      <Interior visible={view === 'home'} />
+      {view === 'home' && <Interior visible />}
       <BuildingInterior visible={view === 'inside'} />
     </>
   )

@@ -6,8 +6,9 @@ import { DESTINATIONS, DEST_BY_ID, type Destination } from '@/game/content'
 import { runtime } from '@/game/runtime'
 import { useGame } from '@/game/store'
 import { useUI } from '@/game/ui'
-import { Part, getMat, windowMat, bulbMat, viewCenter, type V3 } from './shared'
+import { Merged, Part, getMat, windowMat, bulbMat, viewCenter, type V3 } from './shared'
 import { Label } from './Label'
+import { poiColor } from '@/game/poi'
 import { Arena, Bank, Cafe, Harbour, Mine, TemaPort, Station, Beach, Church, Court, Dealer, GovOffice, Hospital, Hotel, Lighthouse, Mall, Park, Plot, Police, Realty, School, Square, Stadium, Zoo } from './Landmarks'
 
 const BASE = 0.12
@@ -360,7 +361,9 @@ function Building({ dest }: { dest: Destination }) {
   const [near, setNear] = useState(true)
   const nearRef = useRef(true)
   useFrame(() => {
-    const n = Math.hypot(cx - viewCenter.x, cz - viewCenter.z) < 52
+    // full detail near the camera; phones (low quality) switch to plain blocks sooner
+    const q = useUI.getState().settings.quality
+    const n = Math.hypot(cx - viewCenter.x, cz - viewCenter.z) < (q === 'low' || q === 'minimal' ? 36 : 52)
     if (n !== nearRef.current) {
       nearRef.current = n
       setNear(n)
@@ -387,9 +390,9 @@ function Building({ dest }: { dest: Destination }) {
         document.body.style.cursor = ''
       }}
     >
-      {near ? <Body dest={dest} /> : <Part p={[0, (LABEL_Y[dest.kind] ?? 4) * 0.3, 0]} s={[dest.w - 0.4, (LABEL_Y[dest.kind] ?? 4) * 0.6, dest.d - 0.4]} c={dest.color} cast={false} />}
+      {near ? (dest.kind === 'plot' ? <Body dest={dest} /> : <Merged k={dest.id}><Body dest={dest} /></Merged>) : <Part p={[0, (LABEL_Y[dest.kind] ?? 4) * 0.3, 0]} s={[dest.w - 0.4, (LABEL_Y[dest.kind] ?? 4) * 0.6, dest.d - 0.4]} c={dest.color} cast={false} />}
       <Highlight w={dest.w} d={dest.d} active={active} />
-      {showLabels && <Label id={`b-${dest.id}`} y={LABEL_Y[dest.kind] ?? 4} cls={`loc-label ${selected ? 'sel' : ''}`} text={`${dest.emoji} ${dest.name}`} range={selected || tracked ? 400 : 48} />}
+      {showLabels && <Label id={`b-${dest.id}`} y={LABEL_Y[dest.kind] ?? 4} cls={`poi-pin ${selected ? 'sel' : ''}`} icon={dest.emoji} color={poiColor(dest.kind)} text={dest.name} range={selected || tracked ? 400 : 48} />}
       <Bubble destId={dest.id} y={LABEL_Y[dest.kind] ?? 4} />
       {tracked && <TrackArrow y={(LABEL_Y[dest.kind] ?? 4) + 1.2} />}
     </group>

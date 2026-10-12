@@ -365,18 +365,36 @@ export const DESTINATIONS: Destination[] = [
 /* ------------------------------ where you can start ------------------------------ */
 /** Neighbourhoods with a compound house where a new player can rent a basic room. Nima is the original. */
 export const START_AREAS = ['nima', 'madina', 'kaneshie', 'jamestown', 'teshie', 'ashaiman', 'dome', 'mallam'] as const
-/** Basic-room compound house per start area (destination id). */
+/** Basic-room compound house per start area (destination id): the first one in each area. */
 export const ROOM_HOMES: Record<string, string> = { nima: 'home_room' }
+/** Every compound house in each start area. New players are put in a random one. */
+export const ROOM_HOMES_ALL: Record<string, string[]> = { nima: ['home_room'] }
+/** Who collects the rent at each compound house. */
+export const ROOM_LANDLORD: Record<string, string> = { home_room: 'Auntie Akosua' }
+const FIRST_LANDLORDS = ['Madam Comfort', 'Papa Yaw', 'Auntie Efua', 'Mr Quaye', 'Maame Serwaa', 'Alhaji Issah', 'Auntie Dede', 'Papa Nii']
+/** Landlords and paint for the extra compound houses, so no two look or read the same. */
+const COMPOUNDS = [
+  { owner: 'Auntie Esi', color: '#f2c9a0', accent: '#a0522d' },
+  { owner: 'Papa Kwesi', color: '#e8d3a9', accent: '#2f6b52' },
+  { owner: 'Maame Adwoa', color: '#f0b7a4', accent: '#7a1f3d' },
+  { owner: 'Uncle Fiifi', color: '#cfe0d6', accent: '#3d5a80' },
+  { owner: 'Nana Yaa', color: '#f6dd8f', accent: '#8a5a2b' },
+  { owner: 'Mr Tetteh', color: '#d9c4e8', accent: '#5b3a8c' },
+  { owner: 'Sister Abena', color: '#f4c7c3', accent: '#c0392b' },
+  { owner: 'Alhaji Musah', color: '#d6e4f0', accent: '#1f3a5f' },
+]
+/** Compound houses wanted per start area. */
+const HOUSES_PER_AREA = 2
 {
   const taken = DESTINATIONS.map((d) => ({ x: d.x - 1, z: d.z - 1, w: d.w + 2, d: d.d + 2 }))
   const hits = (x: number, z: number, w: number, d: number) => taken.some((t) => x < t.x + t.w && x + w > t.x && z < t.z + t.d && z + d > t.z)
+  let n = 0
   for (const areaId of START_AREAS) {
-    if (ROOM_HOMES[areaId]) continue
     const area = AREA_BY_ID[areaId]
     if (!area) continue
-    let placed = false
-    for (let c = -2; c <= 13 && !placed; c++)
-      for (let r = -2; r <= 9 && !placed; r++)
+    const list = (ROOM_HOMES_ALL[areaId] ??= [])
+    for (let c = -2; c <= 13 && list.length < HOUSES_PER_AREA; c++)
+      for (let r = -2; r <= 9 && list.length < HOUSES_PER_AREA; r++)
         for (const xoff of [0, 4]) {
           const p = at(c, r, 6, 5, xoff)
           if (p.x < 1 || p.z < 1 || p.x + p.w > 236 || p.z + p.d > 168) continue
@@ -386,11 +404,15 @@ export const ROOM_HOMES: Record<string, string> = { nima: 'home_room' }
           if ([p.x, p.x + p.w].some((x) => p.z + p.d + 5 > coastZ(x))) continue
           if (Math.hypot(p.x + 3 - LAGOON.x, p.z + 2.5 - LAGOON.z) < LAGOON.r * 1.8 + 4) continue
           if (hits(p.x, p.z, p.w, p.d)) continue
-          const id = `home_room_${areaId}`
-          DESTINATIONS.push(dest({ id, name: `${area.name.split(' & ')[0]} Compound House`, kind: 'home', area: areaId, emoji: '🏠', pos: p, color: '#f2c9a0', accent: '#a0522d', hours: [0, 24], blurb: 'A rented room in a busy family compound house.', homeTier: 'room' }))
+          // first house keeps its old id so existing saves still find it
+          const id = list.length === 0 ? `home_room_${areaId}` : `home_room_${areaId}_${list.length + 1}`
+          const look = list.length === 0 ? { owner: '', color: '#f2c9a0', accent: '#a0522d' } : COMPOUNDS[n++ % COMPOUNDS.length]
+          const name = list.length === 0 ? `${area.name.split(' & ')[0]} Compound House` : `${look.owner}'s Compound`
+          DESTINATIONS.push(dest({ id, name, kind: 'home', area: areaId, emoji: '🏠', pos: p, color: look.color, accent: look.accent, hours: [0, 24], blurb: 'A rented room in a busy family compound house.', homeTier: 'room' }))
           taken.push({ x: p.x - 1, z: p.z - 1, w: p.w + 2, d: p.d + 2 })
-          ROOM_HOMES[areaId] = id
-          placed = true
+          list.push(id)
+          ROOM_LANDLORD[id] = list.length === 1 ? FIRST_LANDLORDS[START_AREAS.indexOf(areaId) % FIRST_LANDLORDS.length] : look.owner
+          ROOM_HOMES[areaId] ??= id
           break
         }
   }
@@ -860,24 +882,63 @@ export interface FurnitureDef {
   walkable?: boolean
   /** Walls and doorways for splitting a home into rooms. */
   build?: boolean
+  /** Catalogue section. */
+  cat?: FurnitureCat
+  /** Catalogue range: standard, premium or luxury. */
+  tier?: FurnitureTier
 }
+export type FurnitureCat = 'living' | 'bedroom' | 'kitchen' | 'bath' | 'decor' | 'tech' | 'wellness'
+export type FurnitureTier = 'standard' | 'premium' | 'luxury'
+export const FURNITURE_CATS: { id: FurnitureCat | 'all'; name: string; emoji: string }[] = [
+  { id: 'all', name: 'All', emoji: '✨' },
+  { id: 'living', name: 'Living', emoji: '🛋️' },
+  { id: 'bedroom', name: 'Bedroom', emoji: '🛏️' },
+  { id: 'kitchen', name: 'Kitchen', emoji: '🍽️' },
+  { id: 'bath', name: 'Bath', emoji: '🛁' },
+  { id: 'decor', name: 'Decor', emoji: '🖼️' },
+  { id: 'tech', name: 'Tech', emoji: '🎮' },
+  { id: 'wellness', name: 'Wellness', emoji: '💆' },
+]
 export const FURNITURE: Record<FurnitureType, FurnitureDef> = {
   bed_basic: { type: 'bed_basic', name: 'Foam mattress', emoji: '🛏️', w: 2, d: 1, price: 0, comfort: 0, sleepMult: 0.85, blurb: 'Thin but it works.' },
   bed_comfy: { type: 'bed_comfy', name: 'Queen bed', emoji: '🛏️', w: 2, d: 1, price: 0, comfort: 2, sleepMult: 1.0, blurb: 'A proper bed.' },
   bed_king: { type: 'bed_king', name: 'King bed', emoji: '🛏️', w: 2, d: 2, price: 0, comfort: 4, sleepMult: 1.15, blurb: 'Deep, restful sleep.' },
-  bed_double: { type: 'bed_double', name: 'Double bed', emoji: '🛏️', w: 2, d: 2, price: 1400, comfort: 3, sleepMult: 1.1, blurb: 'Sleep restores 10% more.' },
+  bed_double: { type: 'bed_double', name: 'Double bed', emoji: '🛏️', w: 2, d: 2, price: 1400, comfort: 3, sleepMult: 1.1, blurb: 'Sleep restores 10% more.', cat: 'bedroom', tier: 'premium' },
   toilet: { type: 'toilet', name: 'Toilet', emoji: '🚽', w: 1, d: 1, price: 0, comfort: 0, blurb: 'Essential.' },
   shower: { type: 'shower', name: 'Shower', emoji: '🚿', w: 1, d: 1, price: 0, comfort: 0, blurb: 'Hot water most days.' },
   shower_rain: { type: 'shower_rain', name: 'Rain shower', emoji: '🚿', w: 1, d: 1, price: 0, comfort: 2, blurb: 'Feels like a spa.' },
-  fridge: { type: 'fridge', name: 'Refrigerator', emoji: '🧊', w: 1, d: 1, price: 900, comfort: 1, blurb: 'Cook meals and grab snacks at home.' },
-  sofa: { type: 'sofa', name: 'Sofa', emoji: '🛋️', w: 2, d: 1, price: 1100, comfort: 3, blurb: 'Relax and recover a little energy.' },
-  computer: { type: 'computer', name: 'Computer desk', emoji: '🖥️', w: 2, d: 1, price: 1750, comfort: 1, blurb: 'Study, play and take freelance gigs.' },
-  tv: { type: 'tv', name: 'Television', emoji: '📺', w: 2, d: 1, price: 1300, comfort: 2, blurb: 'Big fun boost after a long day.' },
-  bookshelf: { type: 'bookshelf', name: 'Bookshelf', emoji: '📚', w: 1, d: 1, price: 450, comfort: 1, blurb: 'Read to grow Communication.' },
-  plant: { type: 'plant', name: 'Potted palm', emoji: '🪴', w: 1, d: 1, price: 120, comfort: 3, blurb: 'Fresh air. Boosts sleep quality.' },
-  fan: { type: 'fan', name: 'Standing fan', emoji: '🌀', w: 1, d: 1, price: 300, comfort: 4, blurb: 'Cooler nights, better sleep.' },
-  coalpot: { type: 'coalpot', name: 'Coal pot', emoji: '🔥', w: 1, d: 1, price: 60, comfort: 0, blurb: 'Charcoal stove, the compound-house kitchen. Cook your own meals.' },
-  stove: { type: 'stove', name: 'Gas cooker', emoji: '🍳', w: 2, d: 1, price: 650, comfort: 2, blurb: 'Two-burner gas cooker with an oven. Cook faster and better.' },
+  fridge: { type: 'fridge', name: 'Refrigerator', emoji: '🧊', w: 1, d: 1, price: 900, comfort: 1, blurb: 'Cook meals and grab snacks at home.', cat: 'kitchen', tier: 'standard' },
+  sofa: { type: 'sofa', name: 'Sofa', emoji: '🛋️', w: 2, d: 1, price: 1100, comfort: 3, blurb: 'Relax and recover a little energy.', cat: 'living', tier: 'standard' },
+  computer: { type: 'computer', name: 'Computer desk', emoji: '🖥️', w: 2, d: 1, price: 1750, comfort: 1, blurb: 'Study, play and take freelance gigs.', cat: 'tech', tier: 'standard' },
+  tv: { type: 'tv', name: 'Television', emoji: '📺', w: 2, d: 1, price: 1300, comfort: 2, blurb: 'Big fun boost after a long day.', cat: 'tech', tier: 'standard' },
+  bookshelf: { type: 'bookshelf', name: 'Bookshelf', emoji: '📚', w: 1, d: 1, price: 450, comfort: 1, blurb: 'Read to grow Communication.', cat: 'living', tier: 'standard' },
+  plant: { type: 'plant', name: 'Potted palm', emoji: '🪴', w: 1, d: 1, price: 120, comfort: 3, blurb: 'Fresh air. Boosts sleep quality.', cat: 'decor', tier: 'standard' },
+  fan: { type: 'fan', name: 'Standing fan', emoji: '🌀', w: 1, d: 1, price: 300, comfort: 4, blurb: 'Cooler nights, better sleep.', cat: 'living', tier: 'standard' },
+  coalpot: { type: 'coalpot', name: 'Coal pot', emoji: '🔥', w: 1, d: 1, price: 60, comfort: 0, blurb: 'Charcoal stove, the compound-house kitchen. Cook your own meals.', cat: 'kitchen', tier: 'standard' },
+  stove: { type: 'stove', name: 'Gas cooker', emoji: '🍳', w: 2, d: 1, price: 650, comfort: 2, blurb: 'Two-burner gas cooker with an oven. Cook faster and better.', cat: 'kitchen', tier: 'standard' },
+  bed_luxury: { type: 'bed_luxury', name: 'Four-poster canopy bed', emoji: '🛏️', w: 2, d: 2, price: 9500, comfort: 6, sleepMult: 1.25, cat: 'bedroom', tier: 'luxury', blurb: 'Carved mahogany, silk drapes, Egyptian cotton. Sleep restores 25% more.' },
+  armchair: { type: 'armchair', name: 'Velvet armchair', emoji: '💺', w: 1, d: 1, price: 650, comfort: 2, cat: 'living', tier: 'premium', blurb: 'Deep emerald velvet with brass feet.' },
+  coffee_table: { type: 'coffee_table', name: 'Marble coffee table', emoji: '🪨', w: 2, d: 1, price: 1200, comfort: 2, cat: 'living', tier: 'premium', blurb: 'Carrara marble top on a gold frame.' },
+  sectional: { type: 'sectional', name: 'Italian leather sectional', emoji: '🛋️', w: 3, d: 2, price: 6800, comfort: 7, cat: 'living', tier: 'luxury', blurb: 'L-shaped, hand-stitched leather. The best seat in Accra.' },
+  rug: { type: 'rug', name: 'Persian rug', emoji: '🧶', w: 2, d: 2, price: 900, comfort: 3, walkable: true, cat: 'decor', tier: 'premium', blurb: 'Hand-knotted wool. Walk right over it.' },
+  floor_lamp: { type: 'floor_lamp', name: 'Arc floor lamp', emoji: '💡', w: 1, d: 1, price: 380, comfort: 2, cat: 'decor', tier: 'standard', blurb: 'Warm light that glows at night.' },
+  dining_set: { type: 'dining_set', name: 'Six-seat dining set', emoji: '🍽️', w: 2, d: 2, price: 2600, comfort: 3, cat: 'kitchen', tier: 'premium', blurb: 'Walnut table and upholstered chairs. Dine like a family.' },
+  wardrobe: { type: 'wardrobe', name: 'Walk-in wardrobe', emoji: '🚪', w: 2, d: 1, price: 1800, comfort: 2, cat: 'bedroom', tier: 'premium', blurb: 'Mirrored doors and space for every outfit.' },
+  vanity: { type: 'vanity', name: 'Hollywood vanity', emoji: '🪞', w: 1, d: 1, price: 1400, comfort: 2, cat: 'bedroom', tier: 'premium', blurb: 'Bulb-lit mirror. Get ready like a star.' },
+  espresso: { type: 'espresso', name: 'Espresso bar', emoji: '☕', w: 1, d: 1, price: 1900, comfort: 2, cat: 'kitchen', tier: 'premium', blurb: 'Barista machine. A strong cup gives you energy.' },
+  kitchen_island: { type: 'kitchen_island', name: 'Chef’s kitchen island', emoji: '👨‍🍳', w: 2, d: 1, price: 7200, comfort: 4, cat: 'kitchen', tier: 'luxury', blurb: 'Quartz island with induction hob. Best meals, fastest.' },
+  bathtub: { type: 'bathtub', name: 'Freestanding bathtub', emoji: '🛁', w: 2, d: 1, price: 4500, comfort: 4, cat: 'bath', tier: 'premium', blurb: 'Clawfoot tub. Soak away the day.' },
+  jacuzzi: { type: 'jacuzzi', name: 'Jacuzzi spa', emoji: '♨️', w: 2, d: 2, price: 18000, comfort: 8, cat: 'bath', tier: 'luxury', blurb: 'Bubbling jets and mood lights. Pure luxury.' },
+  orchid: { type: 'orchid', name: 'Orchid in gold vase', emoji: '🌸', w: 1, d: 1, price: 280, comfort: 2, cat: 'decor', tier: 'standard', blurb: 'Elegant blooms on a plinth.' },
+  gold_mirror: { type: 'gold_mirror', name: 'Gilded floor mirror', emoji: '🪞', w: 1, d: 1, price: 2100, comfort: 2, cat: 'decor', tier: 'luxury', blurb: 'Baroque gold frame. Makes any room look bigger.' },
+  sculpture: { type: 'sculpture', name: 'Bronze sculpture', emoji: '🗿', w: 1, d: 1, price: 4800, comfort: 3, cat: 'decor', tier: 'luxury', blurb: 'Signed piece by an Accra artist on a marble plinth.' },
+  aquarium: { type: 'aquarium', name: 'Tropical aquarium', emoji: '🐠', w: 2, d: 1, price: 5200, comfort: 5, cat: 'decor', tier: 'luxury', blurb: 'Reef fish and soft blue light. Very calming.' },
+  bar_cabinet: { type: 'bar_cabinet', name: 'Home bar', emoji: '🍾', w: 2, d: 1, price: 5600, comfort: 3, cat: 'living', tier: 'luxury', blurb: 'Back-lit shelves of spirits and champagne.' },
+  piano: { type: 'piano', name: 'Grand piano', emoji: '🎹', w: 2, d: 2, price: 24000, comfort: 5, cat: 'living', tier: 'luxury', blurb: 'Gloss black concert grand. Play to unwind and charm.' },
+  console: { type: 'console', name: 'Gaming console', emoji: '🎮', w: 1, d: 1, price: 2400, comfort: 2, cat: 'tech', tier: 'premium', blurb: 'Latest console with FIFA. Big fun boost.' },
+  home_cinema: { type: 'home_cinema', name: 'Home cinema wall', emoji: '🎬', w: 3, d: 1, price: 16000, comfort: 6, cat: 'tech', tier: 'luxury', blurb: '100-inch screen and Dolby sound. Movie night every night.' },
+  treadmill: { type: 'treadmill', name: 'Smart treadmill', emoji: '🏃', w: 1, d: 2, price: 3800, comfort: 1, cat: 'wellness', tier: 'premium', blurb: 'Train Fitness without going to the gym.' },
+  massage_chair: { type: 'massage_chair', name: 'Massage chair', emoji: '💆', w: 1, d: 1, price: 7500, comfort: 5, cat: 'wellness', tier: 'luxury', blurb: 'Zero-gravity recliner. Melts away tiredness.' },
   wall: { type: 'wall', name: 'Wall (1 m)', emoji: '🧱', w: 1, d: 1, price: 120, comfort: 0, build: true, blurb: 'Block wall section. Rotate to run it the other way.' },
   wall_long: { type: 'wall_long', name: 'Wall (3 m)', emoji: '🧱', w: 3, d: 1, price: 320, comfort: 0, build: true, blurb: 'Long wall to split the room in two.' },
   wall_half: { type: 'wall_half', name: 'Half wall', emoji: '🪵', w: 2, d: 1, price: 180, comfort: 1, build: true, blurb: 'Waist-high divider, like a kitchen counter.' },
@@ -896,7 +957,10 @@ export const RENT_OUT = {
   /** Daily rent from a boys' quarters flat. */
   flat: [90, 140] as [number, number],
 }
-export const SHOP_FURNITURE: FurnitureType[] = ['coalpot', 'stove', 'fridge', 'sofa', 'computer', 'tv', 'bookshelf', 'plant', 'fan', 'bed_double']
+/** Everything for sale, cheapest first. */
+export const SHOP_FURNITURE: FurnitureType[] = (Object.keys(FURNITURE) as FurnitureType[])
+  .filter((t) => FURNITURE[t].price > 0 && !FURNITURE[t].build)
+  .sort((a, b) => FURNITURE[a].price - FURNITURE[b].price)
 export const isBed = (t: FurnitureType) => t.startsWith('bed_')
 
 export interface HomeDef {
@@ -1075,7 +1139,7 @@ export const OFFICERS = {
   cautious: { name: 'Sergeant Ofori', note: 'looks around nervously. Hard to read.', accept: 0.5 },
   honest: { name: 'Inspector Badu', note: 'wears a name badge and a body camera. Strictly by the book.', accept: 0 },
 }
-export const CHARGES = { theft: { name: 'theft', fine: 300 }, bribery: { name: 'attempted bribery of a public officer', fine: 800 }, licence: { name: 'licence fraud', fine: 600 }, soliciting: { name: 'soliciting', fine: 400 }, galamsey: { name: 'illegal mining (galamsey)', fine: 2500 }, fraud: { name: 'cyber fraud', fine: 3000 }, smuggling: { name: 'smuggling', fine: 2200 } }
+export const CHARGES = { theft: { name: 'theft', fine: 300 }, robbery: { name: 'armed robbery', fine: 1500 }, bribery: { name: 'attempted bribery of a public officer', fine: 800 }, licence: { name: 'licence fraud', fine: 600 }, soliciting: { name: 'soliciting', fine: 400 }, galamsey: { name: 'illegal mining (galamsey)', fine: 2500 }, fraud: { name: 'cyber fraud', fine: 3000 }, smuggling: { name: 'smuggling', fine: 2200 } }
 export const LEGAL = { custodyMinutes: 720, courtDays: 2, fine: 300, lawyer: 400, jailGuilty: 3, jailConvicted: 7, jailWarrant: 5, jailScale: 720 }
 
 /* ------------------------------ businesses you can own ------------------------------ */
@@ -1223,6 +1287,7 @@ export const DEST_ACTIVITIES: Record<string, ActivityDef[]> = {
   park: [
     A({ id: 'tour', label: 'Museum tour', blurb: 'The story of independence.', icon: '🏛️', kind: 'study', minutes: 60, cost: 30, needs: { fun: 10 }, skillXp: { communication: 10 } }),
     A({ id: 'picnic', label: 'Relax in the gardens', blurb: 'Fountains and shade.', icon: '🌳', kind: 'generic', minutes: 60, needs: { fun: 12, social: 4, energy: 3 } }),
+    A({ id: 'sleeprough', label: 'Sleep on a bench', blurb: 'Free, but cold, dirty and risky. You could be robbed in your sleep.', icon: '🪑', kind: 'sleep', minutes: 360, needs: { energy: 55, hygiene: -20, social: -6, fun: -8, hunger: -12 }, maxNeed: { energy: 92 }, timeScale: 'sleep', effect: 'sleeprough' }),
   ],
   police: [
     A({ id: 'watch', label: 'Volunteer: neighbourhood watch', blurb: 'Help keep the streets safe. Clears your bad reputation.', icon: '🔦', kind: 'social', minutes: 120, needs: { social: 10, energy: -10 }, effect: 'watch', dailyLimit: 1 }),
@@ -1250,6 +1315,7 @@ export const DEST_ACTIVITIES: Record<string, ActivityDef[]> = {
     A({ id: 'swim', label: 'Swim in the sea', blurb: 'Waves and sunshine.', icon: '🏊', kind: 'generic', minutes: 60, needs: { fun: 22, energy: -8, hygiene: -8 }, skillXp: { fitness: 8 } }),
     A({ id: 'horse', label: 'Horse ride on the sand', blurb: 'Classic Labadi.', icon: '🐎', kind: 'generic', minutes: 30, cost: 50, needs: { fun: 22 } }),
     A({ id: 'coconut', label: 'Fresh coconut', blurb: 'Cut fresh by the seller.', icon: '🥥', kind: 'meal', minutes: 10, cost: 10, needs: { hunger: 10, fun: 5 } }),
+    A({ id: 'sleeprough', label: 'Sleep on the sand', blurb: 'Free, but sandy, cold and risky. You could be robbed in your sleep.', icon: '🏖️', kind: 'sleep', minutes: 360, needs: { energy: 50, hygiene: -25, social: -6, fun: -6, hunger: -12 }, maxNeed: { energy: 92 }, timeScale: 'sleep', effect: 'sleeprough' }),
     A({ id: 'beachfootball', label: 'Beach football', blurb: 'Join a pickup game.', icon: '⚽', kind: 'social', minutes: 90, needs: { fun: 18, social: 14, energy: -14, hygiene: -10 }, skillXp: { fitness: 12 } }),
     A({ id: 'pickpocket', label: 'Pickpocket a tourist', blurb: 'Crime. Risky in daylight.', icon: '🫳', kind: 'crime', minutes: 30, crime: { chance: 0.55, min: 30, max: 120 }, needs: { fun: 3 } }),
   ],
@@ -1266,6 +1332,17 @@ export const DEST_ACTIVITIES: Record<string, ActivityDef[]> = {
     A({ id: 'washshower', label: 'Take a shower', blurb: 'Hot water, fresh towel.', icon: '🚿', kind: 'generic', minutes: 20, cost: 10, needs: { hygiene: 80 }, maxNeed: { hygiene: 95 } }),
   ],
 }
+
+/** Crimes against any passer-by in the street, any time. Police on patrol nearby make arrest far more likely. */
+export const STREET_CRIMES: ActivityDef[] = [
+  A({ id: 'snatch', label: 'Pickpocket them', blurb: 'Crime. Lift their wallet and walk away.', icon: '🫳', kind: 'crime', minutes: 10, crime: { chance: 0.6, min: 20, max: 110 }, needs: { fun: 2 } }),
+  A({ id: 'phonesnatch', label: 'Snatch their phone', blurb: 'Crime. Grab and run. Fitness helps you get away.', icon: '📱', kind: 'crime', minutes: 10, crime: { chance: 0.5, min: 60, max: 220 }, needs: { energy: -5 } }),
+  A({ id: 'streetrob', label: 'Rob them at knifepoint', blurb: 'Serious crime. Big money, long sentence if caught.', icon: '🔪', kind: 'crime', minutes: 15, crime: { chance: 0.42, min: 120, max: 450 }, needs: { energy: -4 } }),
+]
+/** Street crimes count as robbery in court. */
+export const STREET_CHARGE = { snatch: 'theft', phonesnatch: 'theft', streetrob: 'robbery' } as const
+/** Each patrol officer within this many tiles cuts your odds. */
+export const COP_RANGE = 12
 
 export const FURNITURE_ACTIVITIES: Partial<Record<FurnitureType, ActivityDef[]>> = {
   bed_basic: [], // filled below for all beds
@@ -1303,11 +1380,32 @@ export const FURNITURE_ACTIVITIES: Partial<Record<FurnitureType, ActivityDef[]>>
     A({ id: 'read', label: 'Read a book', blurb: 'Stories and self-help.', icon: '📚', kind: 'study', minutes: 60, needs: { fun: 5, energy: -2 }, skillXp: { communication: 10 } }),
   ],
 }
+Object.assign(FURNITURE_ACTIVITIES, {
+  armchair: [A({ id: 'relax', label: 'Sit and unwind', blurb: 'Sink into velvet.', icon: '💺', kind: 'generic', minutes: 45, needs: { fun: 10, energy: 5 } })],
+  sectional: [
+    A({ id: 'relax', label: 'Lounge on the sectional', blurb: 'Stretch out in leather.', icon: '🛋️', kind: 'generic', minutes: 60, needs: { fun: 18, energy: 10 } }),
+    A({ id: 'host', label: 'Host friends', blurb: 'Drinks and gist with the crew.', icon: '🥂', kind: 'generic', minutes: 120, cost: 60, needs: { social: 35, fun: 20, energy: -8 } }),
+  ],
+  dining_set: [A({ id: 'dine', label: 'Sit-down dinner', blurb: 'Plated meal at the table. Groceries included.', icon: '🍽️', kind: 'meal', minutes: 50, cost: 30, needs: { hunger: 50, fun: 8, social: 4 }, skillXp: { cooking: 4 } })],
+  wardrobe: [A({ id: 'dress', label: 'Pick an outfit', blurb: 'Look sharp, feel sharp.', icon: '👔', kind: 'generic', minutes: 15, needs: { fun: 6, hygiene: 6 } })],
+  vanity: [A({ id: 'groom', label: 'Get ready', blurb: 'Skincare, hair and fragrance.', icon: '💄', kind: 'generic', minutes: 25, needs: { hygiene: 25, fun: 5 }, maxNeed: { hygiene: 98 } })],
+  espresso: [A({ id: 'espresso', label: 'Pull an espresso', blurb: 'Rich and strong.', icon: '☕', kind: 'meal', minutes: 10, cost: 6, needs: { energy: 14, hunger: 4, bladder: -6 } })],
+  kitchen_island: [A({ id: 'cook', label: 'Cook a chef’s meal', blurb: 'Pro hob and prep space. Groceries included.', icon: '👨‍🍳', kind: 'meal', minutes: 35, cost: 30, needs: { hunger: 60, fun: 8, bladder: -3 }, skillXp: { cooking: 10 }, skillNeedBonus: { skill: 'cooking', need: 'hunger', perLevel: 3 } })],
+  bathtub: [A({ id: 'h_bath', label: 'Take a bath', blurb: 'Bubbles and quiet.', icon: '🛁', kind: 'generic', minutes: 40, needs: { hygiene: 100, fun: 10, energy: 6 }, maxNeed: { hygiene: 95 } })],
+  jacuzzi: [A({ id: 'h_bath', label: 'Soak in the jacuzzi', blurb: 'Jets, bubbles and mood lights.', icon: '♨️', kind: 'generic', minutes: 45, needs: { hygiene: 100, fun: 22, energy: 12 } })],
+  aquarium: [A({ id: 'fish', label: 'Watch the fish', blurb: 'Slow, calm, hypnotic.', icon: '🐠', kind: 'generic', minutes: 30, needs: { fun: 12, energy: 3 } })],
+  bar_cabinet: [A({ id: 'nightcap', label: 'Pour a drink', blurb: 'Something smooth from the top shelf.', icon: '🥃', kind: 'generic', minutes: 20, cost: 35, needs: { fun: 16, social: 4, bladder: -8 } })],
+  piano: [A({ id: 'piano', label: 'Play the piano', blurb: 'Highlife on the keys.', icon: '🎹', kind: 'generic', minutes: 60, needs: { fun: 22, energy: -4 }, skillXp: { communication: 8 } })],
+  console: [A({ id: 'gaming', label: 'Play FIFA', blurb: 'One more match.', icon: '🎮', kind: 'generic', minutes: 60, needs: { fun: 26, energy: -3 } })],
+  home_cinema: [A({ id: 'movie', label: 'Movie night', blurb: 'Blockbuster on the big screen.', icon: '🎬', kind: 'generic', minutes: 120, needs: { fun: 40, energy: 4, social: 4 } })],
+  treadmill: [A({ id: 'run_home', label: 'Run on the treadmill', blurb: 'Cardio at home.', icon: '🏃', kind: 'generic', minutes: 45, needs: { energy: -15, hygiene: -15, fun: 6 }, skillXp: { fitness: 12 } })],
+  massage_chair: [A({ id: 'massage', label: 'Get a massage', blurb: 'Twenty minutes of bliss.', icon: '💆', kind: 'generic', minutes: 30, needs: { energy: 14, fun: 12 } })],
+} as Partial<Record<FurnitureType, ActivityDef[]>>)
 const bedActs = (): ActivityDef[] => [
   A({ id: 'sleep', label: 'Sleep (8 hours)', blurb: 'Restore your energy. Better beds and comfort help.', icon: '😴', kind: 'sleep', minutes: 480, needs: { energy: 100, hunger: -18, bladder: -25, hygiene: -6 }, maxNeed: { energy: 92 }, timeScale: 'sleep' }),
   A({ id: 'nap', label: 'Nap (2 hours)', blurb: 'A quick recharge.', icon: '💤', kind: 'sleep', minutes: 120, needs: { energy: 28, hunger: -5, bladder: -6 }, maxNeed: { energy: 92 }, timeScale: 'sleep' }),
 ]
-for (const t of ['bed_basic', 'bed_comfy', 'bed_king', 'bed_double'] as FurnitureType[]) FURNITURE_ACTIVITIES[t] = bedActs()
+for (const t of ['bed_basic', 'bed_comfy', 'bed_king', 'bed_double', 'bed_luxury'] as FurnitureType[]) FURNITURE_ACTIVITIES[t] = bedActs()
 
 /* ------------------------------------------------------------------ */
 /* NPCs and conversations (all demo characters)                        */
@@ -1669,6 +1767,15 @@ export const EVENTS: Record<string, GameEventDef> = {
       { label: 'Pay “something for the boys” (GH₵30)', hint: 'Works on most officers. Honest ones arrest you for bribery.', effect: { text: 'You fold a note into your licence.', custom: 'cp_bribe' } },
       { label: 'Show your papers', hint: 'Fine if anything is missing (GH₵150).', effect: { text: 'You hand over your documents.', custom: 'cp_papers' } },
       { label: 'Argue your rights', hint: 'Lose 40 minutes; 50% chance of a fine.', effect: { text: '“Officer, I know my rights…”', custom: 'cp_argue' } },
+    ],
+  },
+  tenant_refuse: {
+    id: 'tenant_refuse', title: 'Tenants refuse to leave', emoji: '🚪', weight: 0,
+    body: 'You served notice, but your tenants will not go. “We have nowhere to go. Give us time!”',
+    choices: [
+      { label: 'Offer “cash for keys”', hint: 'Pay them two weeks of rent. They leave tomorrow.', effect: { text: 'You count out the notes…', custom: 'tenant_cash' } },
+      { label: 'Take them to court', hint: 'GH₵350 court fee. Eviction order in 4 days; no rent meanwhile.', effect: { text: 'You file at the rent tribunal.', custom: 'tenant_court' } },
+      { label: 'Let them stay', hint: 'Keep the lease and the rent.', effect: { text: 'You shrug. Rent is rent.', custom: 'tenant_stay' } },
     ],
   },
   mugged: {

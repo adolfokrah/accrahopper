@@ -45,7 +45,8 @@ export const BALANCE = {
 
   rentDays: 7,
   rentWarnHours: 24,
-  rentGraceHours: 48,
+  /** Notice to quit: days of overdue rent before eviction. */
+  rentGraceHours: 72,
   lateFee: 25,
   movingFee: 50,
   recoveryThreshold: 20, // below this the "stuck" recovery hint appears

@@ -42,6 +42,8 @@ export const ACT_LOOK: Record<string, ActLook> = {
   // jamestown
   lighttour: { pose: 'talk', wander: true }, boxing: { pose: 'box' }, oware: { pose: 'sit' }, porter: { pose: 'carry', prop: 'basket', wander: true },
   tourguide: { pose: 'talk', wander: true }, alleyrob: { pose: 'box' },
+  // street crime
+  snatch: { pose: 'talk' }, phonesnatch: { pose: 'run' }, streetrob: { pose: 'box' },
   // new places
   zootour: { pose: 'talk', wander: true }, forestwalk: { pose: 'talk', wander: true }, waiter: { pose: 'snack', prop: 'plate', wander: true },
   vendor: { pose: 'carry', prop: 'basket', wander: true }, baggage: { pose: 'carry', prop: 'box', wander: true }, fiveaside: { pose: 'run', prop: 'ball', wander: true },
@@ -98,6 +100,21 @@ export function furnitureUse(type: FurnitureType, actId: string): FurnUse {
     case 'tv': return { dx: 0, dz: 1.6, face: PI, pose: 'kneel' }
     case 'computer': return { dx: 0, dz: 0.62, face: PI, pose: 'desk' }
     case 'bookshelf': return { dx: 0, dz: 0.8, face: 0, pose: 'study', prop: 'book' }
+    case 'armchair': return { dx: 0, dz: 0.08, face: 0, pose: 'sit', prop: 'phone' }
+    case 'sectional': return actId === 'host' ? { dx: 0, dz: 0.2, face: 0, pose: 'sit', prop: 'drink' } : { dx: -0.4, dz: 0.2, face: 0, pose: 'sit', prop: 'phone' }
+    case 'massage_chair': return { dx: 0, dz: 0.05, face: 0, pose: 'sit' }
+    case 'dining_set': return { dx: 0, dz: 0.75, face: PI, pose: 'eat', prop: 'plate' }
+    case 'kitchen_island': return { dx: 0, dz: 0.75, face: PI, pose: 'cook', prop: 'spoon' }
+    case 'espresso': return { dx: 0, dz: 0.7, face: PI, pose: 'snack', prop: 'drink' }
+    case 'bar_cabinet': return { dx: 0, dz: 0.8, face: PI, pose: 'snack', prop: 'drink' }
+    case 'bathtub':
+    case 'jacuzzi': return { dx: 0, dz: 0, face: 0, pose: 'sit', y: 0.05 }
+    case 'piano': return { dx: 0, dz: 0.85, face: PI, pose: 'desk' }
+    case 'console': return { dx: 0, dz: 1.4, face: PI, pose: 'sit', prop: 'phone' }
+    case 'home_cinema': return { dx: 0, dz: 2.0, face: PI, pose: 'sit', prop: 'drink' }
+    case 'treadmill': return { dx: 0, dz: 0, face: PI, pose: 'run', y: 0.12 }
+    case 'vanity': return { dx: 0, dz: 0.6, face: PI, pose: 'clean' }
+    case 'wardrobe': return { dx: 0, dz: 0.8, face: PI, pose: 'talk' }
     default: return { dx: 0, dz: 0.8, face: PI, pose: 'talk' }
   }
 }

@@ -5,6 +5,7 @@ import { isOpen } from '@/game/activities'
 import { GAME_CONFIG, formatMoney, hourOf } from '@/game/config'
 import { AREA_BY_ID, DESTINATIONS, DEST_BY_ID, NPCS, RIDES, type RideMode } from '@/game/content'
 import { rideQuote, trotroPlan, walkMinutes } from '@/game/life'
+import { poiColor } from '@/game/poi'
 import { takeTrotro, walkToDest } from '@/game/nav'
 import { runtime } from '@/game/runtime'
 import { useGame } from '@/game/store'
@@ -184,24 +185,59 @@ export function CityMap({ onBack }: { onBack: () => void }) {
         const py = sz(d.door.z + 0.5)
         if (px < -20 || py < -30 || px > W + 20 || py > H + 20) continue
         const on = d.id === selId
+        const col = poiColor(d.kind)
         if (!on && v.k < 3.2) {
-          g.fillStyle = '#ea4335'
-          g.beginPath(); g.arc(px, py, 2.5, 0, Math.PI * 2); g.fill()
+          // zoomed out: small category dots with a white ring
+          g.fillStyle = '#ffffff'
+          g.beginPath(); g.arc(px, py, 3.6, 0, Math.PI * 2); g.fill()
+          g.fillStyle = col
+          g.beginPath(); g.arc(px, py, 2.6, 0, Math.PI * 2); g.fill()
           continue
         }
-        const r = on ? 14 : 10
-        g.fillStyle = on ? '#ea4335' : '#ffffff'
-        g.strokeStyle = on ? '#b3261e' : 'rgba(0,0,0,0.25)'
-        g.lineWidth = 1.5
-        g.beginPath()
-        g.arc(px, py - r - 4, r, Math.PI * 0.85, Math.PI * 2.15)
-        g.lineTo(px, py)
-        g.closePath()
-        g.fill()
-        g.stroke()
-        g.font = `${on ? 15 : 11}px system-ui`
-        g.fillText(d.emoji, px, py - r - 4)
-        if (v.k >= 7 || on) text(d.name, px, py + 8, `600 ${on ? 12 : 10}px system-ui`, on ? '#b3261e' : '#3c4043')
+        if (on) {
+          // selected: big red teardrop pin standing on the door
+          const r = 15
+          const cy = py - r - 9
+          g.save()
+          g.shadowColor = 'rgba(0,0,0,0.35)'
+          g.shadowBlur = 6
+          g.shadowOffsetY = 2
+          g.fillStyle = '#ea4335'
+          g.beginPath()
+          g.arc(px, cy, r, Math.PI * 0.78, Math.PI * 2.22)
+          g.quadraticCurveTo(px + r * 0.35, cy + r * 1.05, px, py)
+          g.quadraticCurveTo(px - r * 0.35, cy + r * 1.05, px - r * Math.cos(Math.PI * 0.22), cy + r * Math.sin(Math.PI * 0.22))
+          g.fill()
+          g.restore()
+          g.strokeStyle = '#b3261e'
+          g.lineWidth = 1
+          g.stroke()
+          g.fillStyle = '#ffffff'
+          g.beginPath(); g.arc(px, cy, r - 3.5, 0, Math.PI * 2); g.fill()
+          g.font = '15px system-ui'
+          g.fillText(d.emoji, px, cy + 1)
+          text(d.name, px, py + 9, '700 12.5px system-ui', '#b3261e')
+          continue
+        }
+        // round category badge with a white ring, like Google Maps POIs
+        const r = v.k >= 7 ? 10 : 8.5
+        g.save()
+        g.shadowColor = 'rgba(0,0,0,0.3)'
+        g.shadowBlur = 3
+        g.shadowOffsetY = 1
+        g.fillStyle = '#ffffff'
+        g.beginPath(); g.arc(px, py - r, r + 1.6, 0, Math.PI * 2); g.fill()
+        g.restore()
+        g.fillStyle = col
+        g.beginPath(); g.arc(px, py - r, r, 0, Math.PI * 2); g.fill()
+        g.font = `${Math.round(r * 1.15)}px system-ui`
+        g.fillText(d.emoji, px, py - r + 1)
+        if (v.k >= 6) {
+          // name beside the badge in the category colour, white halo
+          g.textAlign = 'left'
+          text(d.name, px + r + 4, py - r, `600 ${v.k >= 9 ? 11 : 10}px system-ui`, col)
+          g.textAlign = 'center'
+        }
       }
       // you
       const me = useGame.getState().view === 'world' ? runtime.player : useGame.getState().player
@@ -396,7 +432,7 @@ export function CityMap({ onBack }: { onBack: () => void }) {
       {d && (
         <div className="gmap-card">
           <div className="gmap-card-head">
-            <span className="gmap-card-ico">{d.emoji}</span>
+            <span className="gmap-card-ico" style={{ background: poiColor(d.kind) }}>{d.emoji}</span>
             <div>
               <b>{d.name}</b>
               <small>{AREA_BY_ID[d.area]?.name} · <span className={open ? 'green-t' : 'red-t'}>{open ? 'Open' : 'Closed'}</span> · {d.hours[0] === 0 && d.hours[1] === 24 ? '24 hours' : `${d.hours[0]}:00–${d.hours[1] === 24 ? '00' : d.hours[1]}:00`}</small>

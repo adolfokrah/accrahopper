@@ -13,7 +13,7 @@ import {
   travelDef,
   type Resolved,
 } from '@/game/activities'
-import { BALANCE, formatDuration, formatMoney, hourOf } from '@/game/config'
+import { BALANCE, dayOf, formatDuration, formatMoney, hourOf } from '@/game/config'
 import { plotValue } from '@/game/property'
 import { rideQuote } from '@/game/life'
 import {
@@ -42,7 +42,6 @@ import {
   HOMES,
   HOME_DEST,
   NPC_BY_ID,
-  SHOP_FURNITURE,
   SKILLS,
   STOPS,
 } from '@/game/content'
@@ -50,6 +49,7 @@ import { canEnter, walkToDest } from '@/game/nav'
 import { resolve } from '@/game/activities'
 import { canRentOut, missingRequirements, rentOutRange, useGame, type GameState } from '@/game/store'
 import { useUI } from '@/game/ui'
+import { Catalogue } from './Catalogue'
 import { Btn, Chip, Meter, Sheet } from './kit'
 
 const fmtHour = (h: number) => (h === 24 ? 'midnight' : `${h % 12 === 0 ? 12 : h % 12}${h >= 12 && h < 24 ? 'pm' : 'am'}`)
@@ -363,10 +363,16 @@ export function RentOutBtn({ k }: { k: string }) {
   if (!let_ && !canRentOut(s, k)) return null
   const [lo, hi] = rentOutRange(s, k)
   const range = lo === hi ? formatMoney(lo) : `${formatMoney(lo)}–${formatMoney(hi)}`
+  const t = s.tenants[k] ?? {}
+  if (let_ && t.until !== undefined)
+    return <Chip tone="warn">{t.court ? '⚖️ Eviction order' : '📜 Tenants leaving'} · Day {dayOf(t.until)}</Chip>
   return (
-    <Btn small kind={let_ ? 'ghost' : 'soft'} onClick={() => { sfx(let_ ? 'click' : 'coin'); useGame.getState().toggleRentOut(k) }}>
-      {let_ ? `🔑 Rented out · ${range}/day · end lease` : `🏠 Rent it out · ${range}/day`}
-    </Btn>
+    <>
+      {let_ && (t.owed ?? 0) > 0 && <Chip tone="minus">Tenants owe {formatMoney(t.owed!)}</Chip>}
+      <Btn small kind={let_ ? 'ghost' : 'soft'} onClick={() => { sfx(let_ ? 'click' : 'coin'); useGame.getState().toggleRentOut(k) }}>
+        {let_ ? `🔑 Rented out · ${range}/day · evict tenants` : `🏠 Rent it out · ${range}/day`}
+      </Btn>
+    </>
   )
 }
 
@@ -500,29 +506,11 @@ function Transport({ stopId }: { stopId: string }) {
 }
 
 function Shop({ dest }: { dest: string }) {
-  const s = useGame()
-  const pm = priceMultiplier(s, dest)
   return (
-    <div className="shop">
-      {SHOP_FURNITURE.map((t) => {
-        const f = FURNITURE[t]
-        const price = Math.round(f.price * pm)
-        const owned = s.inventory.filter((o) => o.type === t).length
-        return (
-          <div key={t} className="shop-item">
-            <span className="shop-ico">{f.emoji}</span>
-            <div className="shop-text">
-              <b>{f.name}{owned ? ` · owned ${owned}` : ''}</b>
-              <small>{f.blurb} · Comfort +{f.comfort}</small>
-            </div>
-            <Btn small disabled={s.money < price || s.nearDest !== dest || !!s.activity} onClick={() => { useGame.getState().buyFurniture(t); sfx('coin') }}>
-              {formatMoney(price)}
-            </Btn>
-          </div>
-        )
-      })}
+    <>
+      <Catalogue dest={dest} />
       <small className="muted">Bought items go to your inventory. Place them in Home → Decorate.</small>
-    </div>
+    </>
   )
 }
 

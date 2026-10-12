@@ -4,7 +4,7 @@ import { syncMusic } from '@/game/audio'
 import { formatClock, dayOf } from '@/game/config'
 import { saveNow } from '@/game/save'
 import { useGame } from '@/game/store'
-import { QUALITY, useUI, type Quality, type Settings } from '@/game/ui'
+import { detectQuality, QUALITY, useUI, type Quality, type Settings } from '@/game/ui'
 import { Btn, Modal, Sheet } from './kit'
 
 function Toggle({ label, hint, value, onChange }: { label: string; hint?: string; value: boolean; onChange: (v: boolean) => void }) {
@@ -36,11 +36,12 @@ export function SettingsPanel() {
 
       <h3>🖥️ Graphics</h3>
       <div className="pills" role="radiogroup" aria-label="Graphics quality">
+        <button role="radio" aria-checked={st.qualityAuto} className={st.qualityAuto ? 'on' : ''} onClick={() => set({ qualityAuto: true, quality: detectQuality() })}>Auto</button>
         {(Object.keys(QUALITY) as Quality[]).map((q) => (
-          <button key={q} role="radio" aria-checked={st.quality === q} className={st.quality === q ? 'on' : ''} onClick={() => set({ quality: q })}>{q[0].toUpperCase() + q.slice(1)}</button>
+          <button key={q} role="radio" aria-checked={!st.qualityAuto && st.quality === q} className={!st.qualityAuto && st.quality === q ? 'on' : ''} onClick={() => set({ quality: q, qualityAuto: false })}>{q[0].toUpperCase() + q.slice(1)}</button>
         ))}
       </div>
-      <small className="muted">Lower settings reduce shadows, resolution, people, traffic and trees.</small>
+      <small className="muted">{st.qualityAuto ? `Auto picked ${st.quality} for this device and lowers it if the game stutters. ` : ''}Lower settings reduce shadows, resolution, people, traffic and trees.</small>
       <Toggle label="Floating place labels" value={st.showLabels} onChange={(showLabels) => set({ showLabels })} />
 
       <h3>♿ Accessibility</h3>

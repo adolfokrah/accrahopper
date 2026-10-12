@@ -7,7 +7,7 @@ import { AREA_LABELS, G, H_STREETS, footbridges, gantries, roadClassAt, streetCl
 import { Label } from './Label'
 import { Billboards } from './Billboards'
 import { DESTINATIONS } from '@/game/content'
-import { GEO, bulbMat, getMat, windowMat } from './shared'
+import { GEO, Merged, bulbMat, getMat, windowMat } from './shared'
 
 const COLORS: Record<number, string> = {
   [G.GRASS]: '#7ec850',
@@ -30,20 +30,27 @@ const hash = (x: number, z: number) => {
   return n - Math.floor(n)
 }
 
-function Ground() {
+/** Ground tiles in square chunks, each its own instanced mesh so off-screen chunks are culled. */
+const CHUNK = 24
+function GroundChunk({ cx, cz }: { cx: number; cz: number }) {
   const ref = useRef<THREE.InstancedMesh>(null)
+  const x0 = cx * CHUNK
+  const z0 = cz * CHUNK
+  const w = Math.min(CHUNK, MAP_W - x0)
+  const d = Math.min(CHUNK, MAP_H - z0)
   useLayoutEffect(() => {
     const mesh = ref.current
     if (!mesh) return
     const m = new THREE.Matrix4()
     const c = new THREE.Color()
+    const q0 = new THREE.Quaternion()
     let i = 0
-    for (let z = 0; z < MAP_H; z++)
-      for (let x = 0; x < MAP_W; x++) {
+    for (let z = z0; z < z0 + d; z++)
+      for (let x = x0; x < x0 + w; x++) {
         const g = ground[z * MAP_W + x]
         const top = TOP[g]
         const h = top + 1.2
-        m.compose(new THREE.Vector3(x + 0.5, top - h / 2, z + 0.5), new THREE.Quaternion(), new THREE.Vector3(1, h, 1))
+        m.compose(new THREE.Vector3(x + 0.5, top - h / 2, z + 0.5), q0, new THREE.Vector3(1, h, 1))
         mesh.setMatrixAt(i, m)
         const rc = g === G.ROAD ? roadClassAt(x, z) : null
         c.set(rc ? ROAD_COLORS[rc] : COLORS[g])
@@ -54,12 +61,21 @@ function Ground() {
       }
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  }, [])
+    mesh.computeBoundingBox()
+    mesh.computeBoundingSphere()
+  }, [x0, z0, w, d])
   return (
-    <instancedMesh ref={ref} args={[GEO.box, undefined, MAP_W * MAP_H]} receiveShadow frustumCulled={false}>
-      <meshStandardMaterial roughness={0.95} />
-    </instancedMesh>
+    <instancedMesh ref={ref} args={[GEO.box, groundMat, w * d]} receiveShadow />
   )
+}
+const groundMat = new THREE.MeshStandardMaterial({ roughness: 0.95 })
+function Ground() {
+  const chunks = useMemo(() => {
+    const out: { cx: number; cz: number }[] = []
+    for (let cz = 0; cz * CHUNK < MAP_H; cz++) for (let cx = 0; cx * CHUNK < MAP_W; cx++) out.push({ cx, cz })
+    return out
+  }, [])
+  return <>{chunks.map((c) => <GroundChunk key={`${c.cx}-${c.cz}`} cx={c.cx} cz={c.cz} />)}</>
 }
 
 interface Mark { x: number; z: number; rot: number; len: number; w?: number }
@@ -171,8 +187,7 @@ function RoadMarkings() {
       <instancedMesh ref={rail} args={[GEO.box, undefined, Math.max(1, rails.length)]} castShadow frustumCulled={false}>
         <meshStandardMaterial color="#aab2bb" metalness={0.5} roughness={0.4} />
       </instancedMesh>
-      <Footbridges />
-      <Gantries />
+      <Merged k="bridges"><Footbridges /><Gantries /></Merged>
     </>
   )
 }
@@ -337,7 +352,7 @@ function Lamps() {
       <instancedMesh ref={pole} args={[GEO.cyl, undefined, lamps.length]} frustumCulled={false}>
         <meshStandardMaterial color="#3d4350" />
       </instancedMesh>
-      <instancedMesh ref={bulb} args={[GEO.sphere, bulbMat, lamps.length]} frustumCulled={false} />
+      <instancedMesh ref={bulb} args={[GEO.ico, bulbMat, lamps.length]} frustumCulled={false} />
     </>
   )
 }
@@ -559,7 +574,7 @@ export function Terrain() {
       <Lamps />
       <Fillers />
       <Billboards />
-      <Benches />
+      <Merged k="benches"><Benches /></Merged>
     </>
   )
 }

@@ -35,9 +35,15 @@ export function getObjective(s: GameState): Objective {
   if (s.health.illness) {
     return { kind: 'urgent', title: s.health.mild ? 'You are unwell' : 'You are seriously ill', detail: s.health.mild ? 'Buy medicine or see a doctor at Korle Bu Hospital.' : 'See a doctor at Korle Bu Hospital before it gets worse.', destId: 'hospital' }
   }
+  if (s.housing.homeless) {
+    const need = HOMES.room.rent + 50
+    return s.money >= need
+      ? { kind: 'urgent', title: 'Rent a room again', detail: `You have ${formatMoney(s.money)}. Open Home and pick "Rent a room again" (${formatMoney(need)}).`, destId: 'market' }
+      : { kind: 'urgent', title: `Save ${formatMoney(need)} for a room`, detail: 'You are homeless. Odd jobs at Makola Market pay quickly. Sleep on a park bench or the beach.', destId: 'market' }
+  }
   const rent = s.owned.includes(s.housing.tier) ? 0 : HOMES[s.housing.tier].rent
   if (s.housing.overdueSince !== null && rent > 0) {
-    return { kind: 'urgent', title: `Pay overdue rent (${formatMoney(rent)})`, detail: `You have ${formatMoney(s.money)}. Odd jobs at Makola Market and the chop bar pay quickly.`, destId: 'market' }
+    return { kind: 'urgent', title: `Pay overdue rent (${formatMoney(rent)}) or be evicted`, detail: `You have ${formatMoney(s.money)}. Odd jobs at Makola Market and the chop bar pay quickly.`, destId: 'market' }
   }
   const critical = (Object.keys(s.needs) as NeedId[]).sort((a, b) => s.needs[a] - s.needs[b])[0]
   if (s.needs[critical] < 15) {

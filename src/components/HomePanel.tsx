@@ -2,24 +2,39 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { activitiesForFurniture } from '@/game/activities'
-import { formatMoney } from '@/game/config'
-import { BUILD_PIECES, FURNITURE, HOMES, HOME_TIERS, SELL_BACK, SHOP_FURNITURE, UPGRADES, homeDestId } from '@/game/content'
-import { priceMultiplier } from '@/game/activities'
+import { BALANCE, formatMoney } from '@/game/config'
+import { BUILD_PIECES, FURNITURE, HOMES, HOME_TIERS, SELL_BACK, UPGRADES, homeDestId } from '@/game/content'
 import { sfx } from '@/game/audio'
 import { EXTENSIONS, PAINTS, canExtend, comfortOf, extCount, itemsInHome } from '@/game/home'
 import { walkToDest } from '@/game/nav'
-import { useGame } from '@/game/store'
+import { landlordName, useGame } from '@/game/store'
 import { useUI } from '@/game/ui'
 import { ActivityRow, RentOutBtn } from './BuildingPanel'
+import { Catalogue } from './Catalogue'
 import { Btn, Chip, Sheet } from './kit'
 
 function Outside() {
   const s = useGame()
   const home = HOMES[s.housing.tier]
   const near = s.nearDest === homeDestId(s)
+  const homeless = !!s.housing.homeless
+  const roomPrice = HOMES.room.rent + 50
   return (
-    <Sheet title="Home" icon="🏠" onClose={() => useUI.getState().setPanel('none')} subtitle={`${home.name} · rent ${formatMoney(home.rent)}/week`}>
-      {near ? (
+    <Sheet title="Home" icon={homeless ? '🧳' : '🏠'} onClose={() => useUI.getState().setPanel('none')} subtitle={homeless ? 'Evicted · nowhere to live' : `${home.name} · rent ${formatMoney(home.rent)}/week`}>
+      {homeless ? (
+        <div className="card-inner evicted">
+          <b>🧳 You are homeless</b>
+          <small className="muted">{landlordName(s)} evicted you for unpaid rent. Sleep on a park bench or the beach for free (risky), or pay for a guest house. Rent a room in another compound house to get back on your feet.</small>
+          <Btn disabled={s.money < roomPrice || !!s.activity} onClick={() => useGame.getState().moveHome('room')}>🔑 Rent a room again · {formatMoney(roomPrice)}</Btn>
+          {s.money < roomPrice && <small className="muted">You need {formatMoney(roomPrice - s.money)} more. Odd jobs at Makola Market pay quickly.</small>}
+        </div>
+      ) : s.housing.overdueSince !== null ? (
+        <div className="card-inner evicted">
+          <b>📜 Notice to quit</b>
+          <small className="muted">Rent of {formatMoney(home.rent)} plus a late fee is overdue. It is paid automatically as soon as you have the cash. Eviction in {Math.max(1, Math.ceil((s.housing.overdueSince + BALANCE.rentGraceHours * 60 - s.minutes) / 60))}h.</small>
+        </div>
+      ) : null}
+      {homeless ? null : near ? (
         <Btn onClick={() => useGame.getState().enterHome()} disabled={!!s.activity}>🚪 Enter home</Btn>
       ) : (
         <Btn onClick={() => { walkToDest(homeDestId(s)); useUI.getState().setPanel('none') }} disabled={!!s.activity}>🚶 Walk home</Btn>
@@ -29,7 +44,7 @@ function Outside() {
         {HOME_TIERS.map((t) => {
           const h = HOMES[t]
           const owned = s.owned.includes(t)
-          const cur = s.housing.tier === t
+          const cur = s.housing.tier === t && !homeless
           return (
             <div key={t} className={`card-inner housing ${cur ? 'current' : ''}`}>
               <div className="row between"><b>{h.name}</b>{cur ? <Chip tone="plus">Current{owned ? ' · owned' : ''}</Chip> : owned ? <Chip tone="plus">Owned</Chip> : <Chip tone="gold">{formatMoney(h.rent)}/wk</Chip>}</div>
@@ -203,7 +218,7 @@ function Inside() {
 
       {!edit && (
         <>
-          {!sel && <p className="blurb">Tap a bed, shower, toilet, coal pot or cooker, fridge, sofa or computer in the room to use it.</p>}
+          {!sel && <p className="blurb">Tap any furniture in the room to use it: beds, showers, kitchen, sofa, TV, bar, piano and more.</p>}
           {sel && (
             <>
               <div className="here">{FURNITURE[sel.type].emoji} {FURNITURE[sel.type].name}</div>
@@ -222,20 +237,8 @@ function Inside() {
           <DecoBar />
           <p className="blurb">Drag any piece (even the bed) to move it. Tap a piece for Move, Rotate and Store. Press R while moving to rotate. New furniture is delivered to storage below.</p>
           {holding && <small className="muted">Placing {FURNITURE[holding.type].emoji} {FURNITURE[holding.type].name}: tap a green spot in the room.</small>}
-          <b>🛒 Furniture catalogue (delivered, +GH₵20)</b>
-          <div className="shop">
-            {SHOP_FURNITURE.map((t) => {
-              const f = FURNITURE[t]
-              const price = Math.round(f.price * priceMultiplier(s, 'market')) + 20
-              return (
-                <div key={t} className="shop-item">
-                  <span className="shop-ico">{f.emoji}</span>
-                  <div className="shop-text"><b>{f.name}</b><small>{f.blurb} · Comfort +{f.comfort}</small></div>
-                  <Btn small disabled={s.money < price || !!s.viewing} onClick={() => { useGame.getState().buyFurniture(t, true); sfx('coin') }}>{formatMoney(price)}</Btn>
-                </div>
-              )
-            })}
-          </div>
+          <b>🛒 Furniture showroom <small className="muted">· delivered, +GH₵20</small></b>
+          <Catalogue delivered />
           <b>🧱 Walls & rooms (+GH₵20 delivery)</b>
           <small className="muted">Place walls and doorways to split your home into bedrooms, a kitchen or a hall. Rotate (R) to turn them.</small>
           <div className="shop">

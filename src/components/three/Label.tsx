@@ -12,13 +12,16 @@ import { labelScale, viewCenter } from './shared'
 interface LabelEntry {
   text: string
   cls: string
+  /** Map-pin style: category glyph and colour shown in a badge before the text. */
+  icon?: string
+  color?: string
 }
 export const useLabels = create<{ items: Record<string, LabelEntry> }>(() => ({ items: {} }))
 const anchors = new Map<string, THREE.Object3D>()
 const ranges = new Map<string, number>()
 const els = new Map<string, HTMLDivElement>()
 
-export function Label({ id, text, cls = 'loc-label', y = 0, range = 55 }: { id: string; text: string; cls?: string; y?: number; range?: number }) {
+export function Label({ id, text, cls = 'loc-label', y = 0, range = 55, icon, color }: { id: string; text: string; cls?: string; y?: number; range?: number; icon?: string; color?: string }) {
   const ref = useRef<THREE.Group>(null)
   useLayoutEffect(() => {
     if (ref.current) anchors.set(id, ref.current)
@@ -34,30 +37,29 @@ export function Label({ id, text, cls = 'loc-label', y = 0, range = 55 }: { id: 
     }
   }, [id])
   useEffect(() => {
-    useLabels.setState((s) => ({ items: { ...s.items, [id]: { text, cls } } }))
-  }, [id, text, cls])
+    useLabels.setState((s) => ({ items: { ...s.items, [id]: { text, cls, icon, color } } }))
+  }, [id, text, cls, icon, color])
   return <group ref={ref} position={[0, y, 0]} />
 }
 
 const v = new THREE.Vector3()
+const lastTf = new Map<string, string>()
 export function LabelProjector() {
   const { camera, size } = useThree()
   useFrame(() => {
     anchors.forEach((obj, id) => {
       const el = els.get(id)
       if (!el) return
-      let o: THREE.Object3D | null = obj
-      let vis = true
+      // cheap distance test first (world matrices are already current), then walk up for hidden parents
+      v.setFromMatrixPosition(obj.matrixWorld)
+      let vis = Math.hypot(v.x - viewCenter.x, v.z - viewCenter.z) <= (ranges.get(id) ?? 55) * labelScale.v
+      let o: THREE.Object3D | null = vis ? obj : null
       while (o) {
         if (!o.visible) {
           vis = false
           break
         }
         o = o.parent
-      }
-      if (vis) {
-        obj.getWorldPosition(v)
-        if (Math.hypot(v.x - viewCenter.x, v.z - viewCenter.z) > (ranges.get(id) ?? 55) * labelScale.v) vis = false
       }
       if (vis) {
         v.project(camera)
@@ -67,9 +69,14 @@ export function LabelProjector() {
         if (el.style.display !== 'none') el.style.display = 'none'
         return
       }
-      el.style.display = ''
-      el.style.transform = `translate(${((v.x + 1) / 2) * size.width}px, ${((1 - v.y) / 2) * size.height}px) translate(-50%, -100%)`
-      el.style.zIndex = String(Math.round((1 - v.z) * 1000))
+      if (el.style.display === 'none') el.style.display = ''
+      const tf = `translate3d(${Math.round(((v.x + 1) / 2) * size.width)}px, ${Math.round(((1 - v.y) / 2) * size.height)}px, 0) translate(-50%, -100%)`
+      // browsers normalise style strings, so compare against what we last wrote
+      if (lastTf.get(id) !== tf) {
+        lastTf.set(id, tf)
+        el.style.transform = tf
+        el.style.zIndex = String(Math.round((1 - v.z) * 1000))
+      }
     })
   })
   return null
@@ -87,9 +94,16 @@ export function LabelLayer() {
             else els.delete(id)
           }}
           className={`lbl3d ${it.cls}`}
-          style={{ display: 'none' }}
+          style={{ display: 'none', ...(it.color ? { ['--poi' as string]: it.color } : null) }}
         >
-          {it.text}
+          {it.icon ? (
+            <>
+              <span className="poi-badge"><i>{it.icon}</i></span>
+              <span className="poi-name">{it.text}</span>
+            </>
+          ) : (
+            it.text
+          )}
         </div>
       ))}
     </div>

@@ -17,8 +17,9 @@ export function Creator() {
   const [a, setA] = useState<Appearance>({ ...DEFAULT_APPEARANCE })
   const [traits, setTraits] = useState<TraitId[]>([])
   const [life, setLife] = useState<Lifestyle>('worker')
-  const [area, setArea] = useState<string>('nima')
   const areas = START_AREAS.filter((id) => ROOM_HOMES[id])
+  // a different neighbourhood each new game unless the player picks one
+  const [area, setArea] = useState<string>(() => areas[Math.floor(Math.random() * areas.length)] ?? 'nima')
   const set = (p: Partial<Appearance>) => setA((x) => ({ ...x, ...p }))
   const toggle = (t: TraitId) => setTraits((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : cur.length >= 2 ? cur : [...cur, t]))
   const ok = name.trim().length >= 2 && traits.length === 2
@@ -43,6 +44,7 @@ export function Creator() {
             <Btn small kind="soft" onClick={() => {
               setA({ skin: rand(SKIN_TONES.length), hair: rand(HAIRSTYLES.length), hairColor: rand(HAIR_COLORS.length), outfit: rand(OUTFITS.length), outfitColor: rand(OUTFIT_COLORS.length), accessory: rand(ACCESSORIES.length) })
               if (!name) setName(NAMES[rand(NAMES.length)])
+              setArea(areas[rand(areas.length)])
             }}>🎲 Surprise me</Btn>
           </div>
           <div className="creator-form">

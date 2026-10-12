@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { runtime } from '@/game/runtime'
+import { useGame } from '@/game/store'
 import { QUALITY, useUI } from '@/game/ui'
 import { G, MAP_H, MAP_W, findPath, ground, isRoad, junctions, lightFor, walkable } from '@/game/world'
 import {
@@ -22,6 +23,7 @@ import {
 import type { Appearance } from '@/game/types'
 import { Character } from './Character'
 import { GEO, Part, headlightMat, viewCenter } from './shared'
+import { Label } from './Label'
 import { PragiaModel } from './Vehicles'
 
 /** Shared positions so cars can brake for people (cosmetic simulation only). */
@@ -48,7 +50,11 @@ interface Ped {
   wait: number
   moving: boolean
   look: Appearance
+  cop?: boolean
 }
+/** The first few people in the crowd are police officers on foot patrol. */
+const COPS = 3
+const COP_LOOK: Appearance = { skin: 4, hair: 0, hairColor: 0, outfit: 1, outfitColor: 1, accessory: 2 }
 
 function randomLook(r: () => number): Appearance {
   return { skin: Math.floor(r() * 6), hair: Math.floor(r() * 6), hairColor: Math.floor(r() * 6), outfit: Math.floor(r() * 4), outfitColor: Math.floor(r() * 7), accessory: r() < 0.7 ? 0 : Math.floor(r() * 6) }
@@ -82,19 +88,49 @@ export function Pedestrians() {
   const count = useUI((s) => QUALITY[s.settings.quality].peds)
   const peds = useMemo<Ped[]>(() => {
     const r = rng(99)
-    return Array.from({ length: 30 }, () => ({ x: -999, z: -999, path: [], speed: 1.3 + r() * 1.0, wait: r() * 3, moving: false, look: randomLook(r) }))
+    return Array.from({ length: 30 }, (_, i) => {
+      const look = randomLook(r)
+      return i < COPS ? { x: -999, z: -999, path: [], speed: 1.1, wait: r() * 3, moving: false, look: COP_LOOK, cop: true } : { x: -999, z: -999, path: [], speed: 1.3 + r() * 1.0, wait: r() * 3, moving: false, look }
+    })
   }, [])
   const refs = useRef<(THREE.Group | null)[]>([])
+  const rushed = useRef(false)
   useEffect(() => {
     people.length = count
-    return () => { people.length = 0 }
+    return () => { people.length = 0; runtime.peds.length = 0; runtime.cops.length = 0 }
   }, [count])
   useFrame((_, dtRaw) => {
+    if (useGame.getState().view !== 'world') return // the city is hidden indoors: skip the simulation
     const dt = Math.min(dtRaw, 0.1)
+    const target = useUI.getState().robTarget
+    const me = runtime.player
+    // caught: the nearest officer runs over to make the arrest
+    const caught = useGame.getState().event?.id === 'arrest_offer'
+    if (caught && !rushed.current && count > 0) {
+      rushed.current = true
+      const cop = peds[0]
+      cop.x = me.x + 1.4
+      cop.z = me.z + 0.6
+      cop.path = []
+      cop.wait = 30
+    } else if (!caught) rushed.current = false
+    runtime.cops.length = 0
     for (let i = 0; i < count; i++) {
       const p = peds[i]
       const g = refs.current[i]
       if (!p || !g) continue
+      if (i === target || (caught && i === 0)) {
+        // the victim (or arresting officer) stops and faces you
+        p.path = []
+        p.moving = false
+        p.wait = 2
+        g.position.set(p.x, 0.12, p.z)
+        g.rotation.y = Math.atan2(me.x - p.x, me.z - p.z)
+        g.visible = p.x > -100
+        runtime.peds[i] = { x: p.x, z: p.z, cop: p.cop }
+        if (p.cop) runtime.cops.push({ x: p.x, z: p.z })
+        continue
+      }
       // keep people around the camera: recycle the far ones
       if (Math.hypot(p.x - viewCenter.x, p.z - viewCenter.z) > DESPAWN) {
         const t = spawnNear(pedTile)
@@ -142,13 +178,29 @@ export function Pedestrians() {
       people[i] = people[i] ?? { x: 0, z: 0 }
       people[i].x = p.x
       people[i].z = p.z
+      runtime.peds[i] = { x: p.x, z: p.z, cop: p.cop }
+      if (p.cop && p.x > -100) runtime.cops.push({ x: p.x, z: p.z })
     }
   })
   return (
     <>
       {peds.slice(0, count).map((p, i) => (
-        <group key={i} ref={(el) => { refs.current[i] = el }} position={[p.x, 0.12, p.z]}>
+        <group
+          key={i}
+          ref={(el) => { refs.current[i] = el }}
+          position={[p.x, 0.12, p.z]}
+          onClick={(e) => {
+            if (e.delta > 6) return
+            e.stopPropagation()
+            if (p.cop) return useUI.getState().toast('👮 A police officer on foot patrol. Crimes near them rarely go unseen.', 'info')
+            useUI.setState({ robTarget: i })
+          }}
+          onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer' }}
+          onPointerOut={() => { document.body.style.cursor = '' }}
+        >
           <Character appearance={p.look} lite scale={0.95} getMotion={() => ({ moving: p.moving, speed: p.speed })} />
+          {p.cop && <Label id={`cop-${i}`} y={2.15} cls="npc-tag cop-tag" text="👮 Police" range={28} />}
+          {p.cop && <Part p={[0, 1.02, 0.17]} s={[0.12, 0.1, 0.02]} c="#f1b82d" cast={false} />}
         </group>
       ))}
     </>
@@ -410,6 +462,7 @@ export function Traffic() {
   const refs = useRef<(THREE.Group | null)[]>([])
   const reduce = useUI((s) => s.settings.reduceMotion)
   useFrame((_, dtRaw) => {
+    if (useGame.getState().view !== 'world') return // the city is hidden indoors: skip the simulation
     const dt = Math.min(dtRaw, 0.05) * (reduce ? 0.6 : 1)
     carSpots.length = count
     for (let i = 0; i < count; i++) {
@@ -509,6 +562,7 @@ export function TrafficLights() {
     for (const r of [pole, head, lamps]) if (r.current) r.current.instanceMatrix.needsUpdate = true
   }, [])
   useFrame((_, dt) => {
+    if (useGame.getState().view !== 'world') return // the city is hidden indoors: skip the simulation
     timer.current += dt
     if (timer.current < 0.2 || !lamps.current) return
     timer.current = 0
@@ -536,7 +590,7 @@ export function TrafficLights() {
       <instancedMesh ref={head} args={[GEO.box, undefined, N * 2]} frustumCulled={false}>
         <meshStandardMaterial color="#1b1b1b" />
       </instancedMesh>
-      <instancedMesh ref={lamps} args={[GEO.sphere, undefined, N * 6]} frustumCulled={false}>
+      <instancedMesh ref={lamps} args={[GEO.dot, undefined, N * 6]} frustumCulled={false}>
         <meshBasicMaterial toneMapped={false} />
       </instancedMesh>
     </>

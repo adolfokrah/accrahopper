@@ -14,6 +14,7 @@ import {
   FARES,
   FURNITURE,
   FURNITURE_ACTIVITIES,
+  STREET_CRIMES,
   HANGOUT,
   HOMES,
   NPCS,
@@ -174,7 +175,8 @@ export function resolve(def: ActivityDef, ctx: ActivityContext, s: GameState): R
 
   // ---- availability ------------------------------------------------
   let reason: string | undefined
-  if (s.activity) reason = 'Finish your current activity first'
+  if (s.event) reason = 'Deal with what is happening first'
+  else if (s.activity) reason = 'Finish your current activity first'
   else if (s.viewing && ctx.furnitureUid !== undefined) reason = 'You are only viewing this home'
   else if (dest && s.view === 'world' && s.nearDest !== dest.id) reason = `Walk to ${dest.name} first`
   else if (dest && !isOpen(dest.hours, hour) && dest.hours[0] !== 0) reason = `Closed. Opens ${fmtHour(dest.hours[0])}`
@@ -303,6 +305,7 @@ export function findDef(s: GameState, defId: string, ctx: ActivityContext): Acti
     const npc = ctx.npc ? NPC_BY_ID[ctx.npc] : null
     return npc ? { ...HANGOUT, id: defId, label: `Hang out with ${npc.name}` } : null
   }
+  if (ctx.street) return STREET_CRIMES.find((d) => d.id === defId) ?? null
   if (ctx.dest) return destActs(ctx.dest).find((d) => d.id === defId) ?? null
   if (ctx.furnitureUid !== undefined) {
     const type = furnitureTypeOf(s, ctx.furnitureUid)

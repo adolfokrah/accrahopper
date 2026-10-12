@@ -106,7 +106,7 @@ export function comfortOf(tier: HomeTier, inventory: OwnedFurniture[], upgrades:
 /** Sleep quality multiplier for a given bed in the current home. */
 export function sleepMultiplier(tier: HomeTier, inventory: OwnedFurniture[], bedType: FurnitureType, upgrades: string[] = []): number {
   const base = FURNITURE[bedType].sleepMult ?? 0.85
-  const comfort = Math.min(30, comfortOf(tier, inventory, upgrades))
+  const comfort = Math.min(45, comfortOf(tier, inventory, upgrades))
   return base * (1 + comfort / 100)
 }
 

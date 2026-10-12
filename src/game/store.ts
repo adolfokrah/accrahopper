@@ -36,6 +36,7 @@ import {
   LOAN,
   OFFICERS,
   CHARGES,
+  STREET_CHARGE,
   LEGAL,
   NPCS,
   OUTDOOR_KINDS,
@@ -64,6 +65,8 @@ import {
   showOn,
   LIFESTYLES,
   ROOM_HOMES,
+  ROOM_HOMES_ALL,
+  ROOM_LANDLORD,
   AREA_BY_ID,
   type Lifestyle,
   RENT_OUT,
@@ -109,7 +112,7 @@ export interface GameState {
   skills: Record<SkillId, number>
   careers: Partial<Record<CareerId, CareerProgress>>
   employment: CareerId | null
-  housing: { tier: HomeTier; nextRentDue: number; overdueSince: number | null; plotId?: string | null; /** Which compound house your basic room is in. */ roomDest?: string | null }
+  housing: { tier: HomeTier; nextRentDue: number; overdueSince: number | null; plotId?: string | null; /** Which compound house your basic room is in. */ roomDest?: string | null; /** Evicted from the basic room with nowhere to live. */ homeless?: boolean }
   inventory: OwnedFurniture[]
   friendships: Record<string, Friendship>
   transactions: Tx[]
@@ -150,6 +153,8 @@ export interface GameState {
   upgrades: Partial<Record<HomeTier, string[]>>
   /** Property let to tenants: home tiers you bought, or `plot:<id>` for a house you built. */
   rentedOut: string[]
+  /** Trouble with tenants per let property: unpaid rent, a move-out date, a court case. */
+  tenants: Record<string, { owed?: number; until?: number; court?: boolean }>
   /** Paint colours and moved built-in furniture per home. */
   homeStyle: HomeStyleMap
   bank: { open: boolean; balance: number }
@@ -310,6 +315,7 @@ export const freshGame = (profile: Profile | null): SavedGame => ({
   businesses: {},
   upgrades: {},
   rentedOut: [],
+  tenants: {},
   homeStyle: {},
   bank: { open: false, balance: 0 },
   invest: { tbills: [], shares: {}, prices: Object.fromEntries(STOCKS.map((st) => [st.id, [st.start]])) },
@@ -346,6 +352,7 @@ function draft(s: GameState): GameState {
     edu: { ...s.edu },
     plots: { ...s.plots },
     rentedDay: { ...s.rentedDay },
+    tenants: { ...s.tenants },
     items: { ...s.items },
     bank: { ...s.bank },
     invest: { ...s.invest, shares: { ...s.invest.shares } },
@@ -680,7 +687,15 @@ function finishActivity(d: GameState) {
 
   // ---- custom effects
   const fx = a.effect ?? ''
-  if (fx === 'consult' || fx === 'ward') {
+  if (fx === 'sleeprough') {
+    lines.push('🥶 A cold, uncomfortable night outdoors.')
+    if (Math.random() < 0.18 && d.money > 0) {
+      const lost = Math.round(d.money * 0.35)
+      spend(d, lost, 'Robbed while sleeping rough', 'fee')
+      lines.push(`🔪 Someone went through your pockets while you slept: ${formatMoney(lost)} gone. Keep savings in the bank.`)
+      tone = 'bad'
+    }
+  } else if (fx === 'consult' || fx === 'ward') {
     d.health.illness = null
     lines.push('💚 You are cured. Feel better!')
     title = fx === 'ward' ? 'Discharged from hospital' : 'Treatment complete'
@@ -860,6 +875,12 @@ function finishActivity(d: GameState) {
     let chance = a.crime.chance - d.legal.heat / 400
     if (friendPoints(d, 'nii') >= NPC_BY_ID.nii.perk.friendAt) chance += 0.15
     if (friendPoints(d, 'boateng') >= NPC_BY_ID.boateng.perk.friendAt) chance += 0.1
+    if (a.ctx.street) {
+      const hr = hourOf(d.minutes)
+      if (hr >= 20 || hr < 5) chance += 0.1 // darkness helps
+      if (a.defId === 'phonesnatch') chance += skillLevel(d, 'fitness') * 0.03
+      chance -= (a.ctx.cops ?? 0) * 0.3 // patrol officers close by
+    }
     if (Math.random() < chance) {
       const got = Math.round(a.crime.min + Math.random() * (a.crime.max - a.crime.min))
       d.money += got
@@ -868,8 +889,11 @@ function finishActivity(d: GameState) {
       title = 'You got away with it'
       tone = 'neutral'
     } else {
-      showResult(d, 'Caught!', '🚓', ['👮 A police officer grabbed your arm.', '“Where do you think you are going?”'], 'bad')
-      d.event = { id: 'arrest_offer', ctx: { officer: rollOfficer() } }
+      const charge = a.ctx.street ? STREET_CHARGE[a.defId as keyof typeof STREET_CHARGE] : undefined
+      const seen = a.ctx.street && (a.ctx.cops ?? 0) > 0
+      showResult(d, 'Caught!', '🚓', [seen ? '👮 The patrol officer saw everything and tackled you.' : a.ctx.street ? '📢 They shouted “Thief!” and a police officer grabbed you.' : '👮 A police officer grabbed your arm.', '“Where do you think you are going?”'], 'bad')
+      d.legal.heat = Math.min(100, d.legal.heat + 10)
+      d.event = { id: 'arrest_offer', ctx: { officer: rollOfficer(), ...(charge ? { offence: charge } : {}) } }
       return
     }
   }
@@ -1119,6 +1143,79 @@ export function rentOutRange(s: Pick<GameState, 'plots' | 'upgrades'>, key: stri
   return [v, v]
 }
 
+/** Who you owe rent to: the compound landlady for a basic room, the letting agent otherwise. */
+export function landlordName(s: Pick<GameState, 'housing'>): string {
+  if (s.housing.tier !== 'room') return 'The letting agent'
+  return ROOM_LANDLORD[s.housing.roomDest ?? 'home_room'] ?? 'Your landlady'
+}
+
+/** Thrown out of the basic room: the landlady keeps belongings to cover the debt; you sleep rough until you rent again. */
+function evictFromRoom(d: GameState, owed: number) {
+  const who = landlordName(d)
+  lifeEvent(d, 'evicted')
+  repositionFurniture(d)
+  // most valuable things go first until the debt is covered
+  const items = [...d.inventory].sort((a, b) => FURNITURE[b.type].price - FURNITURE[a.type].price)
+  const kept: string[] = []
+  let covered = 0
+  for (const it of items) {
+    if (covered >= owed) break
+    covered += Math.round(FURNITURE[it.type].price * SELL_BACK.furniture)
+    kept.push(FURNITURE[it.type].name)
+    d.inventory = d.inventory.filter((o) => o.uid !== it.uid)
+  }
+  d.housing = { ...d.housing, homeless: true, overdueSince: null, nextRentDue: d.minutes + 365 * 1440 }
+  d.view = 'world'
+  d.insideDest = null
+  const door = DEST_BY_ID[homeDestId(d)].door
+  d.player = { x: door.x + 0.5, z: door.z + 0.5, rot: 0 }
+  teleport(d.player.x, d.player.z)
+  showResult(d, 'Evicted!', '🧳', [
+    `🚪 ${who} changed the locks. You have nowhere to live.`,
+    kept.length ? `📦 Kept to cover your debt: ${kept.join(', ')}.` : '📦 You had nothing worth keeping. Your bag is on the street.',
+    '🪑 Sleep on a park bench or the beach, or pay for a guest house.',
+    '🏠 Rent a room again from Home → Move in.',
+  ], 'bad')
+}
+
+/** Daily tenant life: late rent, damage, and leaving on the agreed date. Returns rent collected. */
+function tenantDay(d: GameState, rand: (r: [number, number]) => number): number {
+  let total = 0
+  for (const key of d.rentedOut) {
+    const t = { ...(d.tenants[key] ?? {}) }
+    const name = rentOutName(key)
+    if (t.until !== undefined) {
+      if (d.minutes >= t.until) {
+        d.rentedOut = d.rentedOut.filter((k) => k !== key)
+        const { [key]: _gone, ...rest } = d.tenants
+        void _gone
+        d.tenants = rest
+        toast(t.court ? `⚖️ Bailiffs removed the tenants from ${name}. It is empty again.` : `🔑 Your tenants handed back the keys to ${name}.`, 'info')
+      }
+      continue
+    }
+    const got = rentOutIncome(d, key, rand)
+    if (!got) continue
+    if (Math.random() < 0.1) {
+      t.owed = (t.owed ?? 0) + got
+      toast(`🏠 Tenants at ${name} are late with rent. They owe ${formatMoney(t.owed)}.`, 'warn')
+    } else {
+      const pay = got + (t.owed ?? 0)
+      if (t.owed) toast(`🏠 Tenants at ${name} paid their arrears.`, 'good')
+      t.owed = 0
+      earn(d, pay, `Rent from tenants: ${name}`, 'bonus')
+      total += pay
+    }
+    if (Math.random() < 0.04) {
+      const cost = Math.round(got * (1 + Math.random() * 2))
+      spend(d, cost, `Repairs: ${name}`, 'fee')
+      toast(`🔧 Tenants at ${name} broke something. Repairs cost ${formatMoney(cost)}.`, 'warn')
+    }
+    d.tenants = { ...d.tenants, [key]: t }
+  }
+  return total
+}
+
 function rentOutIncome(d: GameState, key: string, rand: (r: [number, number]) => number) {
   return canRentOut(d, key) ? rand(rentOutRange(d, key)) : 0
 }
@@ -1151,11 +1248,12 @@ function dayChange(d: GameState) {
   }
   // tenants in homes you own
   const rand = (r: [number, number]) => Math.round(r[0] + Math.random() * (r[1] - r[0]))
-  for (const key of d.rentedOut) {
-    const got = rentOutIncome(d, key, rand)
-    if (!got) continue
-    earn(d, got, `Rent from tenants: ${rentOutName(key)}`, 'bonus')
-    bizTotal += got
+  bizTotal += tenantDay(d, rand)
+  // notice to quit while your own rent is overdue
+  if (d.housing.overdueSince !== null && !d.housing.homeless) {
+    const left = Math.max(1, Math.ceil((d.housing.overdueSince + BALANCE.rentGraceHours * 60 - d.minutes) / 60))
+    const owe = HOMES[d.housing.tier].rent + BALANCE.lateFee
+    toast(`📜 Notice to quit from ${landlordName(d)}: pay ${formatMoney(owe)} within ${left}h or you will be evicted.`, 'bad')
   }
   for (const t of Object.keys(d.upgrades) as HomeTier[]) {
     if (!(d.upgrades[t] ?? []).includes('flat') || !d.owned.includes(t)) continue
@@ -1329,8 +1427,8 @@ function timeEffects(d: GameState, prev: number) {
   }
   checkGoals(d)
   const h = d.housing
-  const rent = d.owned.includes(h.tier) ? 0 : HOMES[h.tier].rent
-  // rent warning (owned homes pay nothing)
+  const rent = d.owned.includes(h.tier) || h.homeless ? 0 : HOMES[h.tier].rent
+  // rent warning (owned homes and the homeless pay nothing)
   if (rent === 0) {
     h.overdueSince = null
     h.nextRentDue = Math.max(h.nextRentDue, now + 1440)
@@ -1347,17 +1445,22 @@ function timeEffects(d: GameState, prev: number) {
       toast(`🏠 Rent paid: ${formatMoney(rent)}`, 'info')
     } else {
       h.overdueSince = now
-      toast(`⚠️ Rent overdue! Pay ${formatMoney(rent)} within ${BALANCE.rentGraceHours}h. Odd jobs at Makola Market and the chop bar can help.`, 'bad')
+      showResult(d, 'Rent overdue', '📜', [
+        `${landlordName(d)} served you a notice to quit.`,
+        `Pay ${formatMoney(rent)} plus a late fee within ${Math.round(BALANCE.rentGraceHours / 24)} days or you will be evicted.`,
+        'Odd jobs at Makola Market and the chop bar pay quickly.',
+      ], 'bad')
     }
   } else if (h.overdueSince !== null) {
-    const waived = friendPoints(d, 'akosua') >= NPC_BY_ID.akosua.perk.friendAt
+    // Auntie Akosua waives the late fee for good friends (only at her own compound)
+    const waived = h.tier === 'room' && (h.roomDest ?? 'home_room') === 'home_room' && friendPoints(d, 'akosua') >= NPC_BY_ID.akosua.perk.friendAt
     const fee = waived ? 0 : BALANCE.lateFee
     if (d.money >= rent + fee) {
       spend(d, rent, `Rent: ${HOMES[h.tier].name}`, 'rent')
       if (fee) spend(d, fee, 'Late rent fee', 'fee')
       h.overdueSince = null
       h.nextRentDue = Math.max(h.nextRentDue + BALANCE.rentDays * 1440, now + BALANCE.rentDays * 1440 - 3 * 1440)
-      toast(`🏠 Overdue rent paid${fee ? ` with ${formatMoney(fee)} late fee` : ''}.`, 'good')
+      toast(`🏠 Overdue rent paid${fee ? ` with ${formatMoney(fee)} late fee` : ''}. The notice is withdrawn.`, 'good')
     } else if (now - h.overdueSince >= BALANCE.rentGraceHours * 60) {
       if (h.tier !== 'room') {
         lifeEvent(d, 'evicted')
@@ -1370,12 +1473,8 @@ function timeEffects(d: GameState, prev: number) {
         const door = DEST_BY_ID[homeDestId(d)].door
         d.player = { x: door.x + 0.5, z: door.z + 0.5, rot: 0 }
         teleport(d.player.x, d.player.z)
-        toast('🏚️ You could not pay rent and moved back to the basic room. Your furniture is in storage.', 'bad')
-      } else {
-        h.overdueSince = now
-        d.needs.social = clamp(d.needs.social - 10)
-        toast('Auntie Akosua gives you more time, but she is not happy. Earn money and pay soon.', 'warn')
-      }
+        showResult(d, 'Evicted!', '🧳', ['🏚️ The letting agent changed the locks.', 'You moved back to a basic room. Your furniture is in storage.', `First week's rent is due in ${BALANCE.rentDays} days.`], 'bad')
+      } else evictFromRoom(d, rent + fee)
     }
   }
   // closing time: staff politely show you out
@@ -1419,14 +1518,16 @@ function timeEffects(d: GameState, prev: number) {
     if (skillLevel(d, 'technology') >= 1 && hr >= 9 && hr < 20) pool.push({ id: 'freelance', w: EVENTS.freelance.weight })
     if (friendPoints(d, 'yaw') >= 15 && hr >= 10 && hr < 21) pool.push({ id: 'friend_invite', w: EVENTS.friend_invite.weight })
     if (inWorld && districtAt(d.player.x, d.player.z) === 'commercial' && hr >= 8 && hr < 19) pool.push({ id: 'market_sale', w: EVENTS.market_sale.weight })
-    if (inWorld && (hr >= 21 || hr < 5) && d.money >= 60) pool.push({ id: 'mugged', w: 4 })
+    if (inWorld && (hr >= 20 || hr < 5) && d.money >= 60) pool.push({ id: 'mugged', w: 9 })
+    // known to the police: patrols stop and search you
+    if (inWorld && d.legal.heat >= 25) pool.push({ id: 'police_stop', w: Math.round(d.legal.heat / 8) })
     if (d.view === 'home' && hr >= 18 && hr < 23 && !(d.upgrades[d.housing.tier] ?? []).includes('generator')) pool.push({ id: 'dumsor', w: 3 })
     if (d.romance.partner && hr >= 10 && hr < 21) pool.push({ id: 'partner_call', w: 2 })
     const total = pool.reduce((a, b) => a + b.w, 0)
     if (total > 0) {
       let r = Math.random() * total
       const pick = pool.find((p) => (r -= p.w) <= 0) ?? pool[0]
-      d.event = { id: pick.id, ctx: {} }
+      d.event = { id: pick.id, ctx: pick.id === 'police_stop' ? { officer: rollOfficer(), offence: 'suspicion' } : {} }
       d.eventCooldownUntil = now + BALANCE.eventCooldownMinutes
     }
   }
@@ -1449,6 +1550,23 @@ function applyEffect(d: GameState, eff: EventEffect, npcFallback?: string): stri
 
 /* ------------------------------------------------------------------ */
 
+/** A random compound house in the chosen area, so new games do not all start in the same room. */
+function pickRoomHome(area: string): string {
+  const list = ROOM_HOMES_ALL[area] ?? []
+  return list[Math.floor(Math.random() * list.length)] ?? ROOM_HOMES[area] ?? 'home_room'
+}
+
+/** Police events you cannot walk away from. */
+const POLICE_EVENTS = new Set(['arrest_offer', 'police_stop', 'checkpoint'])
+/** Why the player cannot go anywhere right now (an open event, custody, any activity), or null. */
+export function busyReason(s: Pick<GameState, 'activity' | 'event'>): string | null {
+  if (s.event) return POLICE_EVENTS.has(s.event.id) ? '👮 You cannot leave. Deal with the police first.' : 'Deal with what is happening first'
+  if (s.activity?.kind === 'custody') return '🚓 You are in police custody. Wait for bail.'
+  if (s.activity?.kind === 'jail') return '⛓️ You are serving a prison sentence.'
+  if (s.activity) return 'Finish your current activity first'
+  return null
+}
+
 export const useGame = create<GameState>((set, get) => ({
   screen: 'menu',
   nearDest: null,
@@ -1458,7 +1576,7 @@ export const useGame = create<GameState>((set, get) => ({
     const g = freshGame({ ...profile, lifestyle: start.lifestyle })
     const life = LIFESTYLES[start.lifestyle]
     g.money = life.money
-    g.housing = { tier: life.tier, nextRentDue: g.minutes + BALANCE.rentDays * 1440 * life.prepaidWeeks, overdueSince: null, roomDest: ROOM_HOMES[start.area] ?? 'home_room' }
+    g.housing = { tier: life.tier, nextRentDue: g.minutes + BALANCE.rentDays * 1440 * life.prepaidWeeks, overdueSince: null, roomDest: pickRoomHome(start.area) }
     if (start.lifestyle === 'hustler') g.skills = { ...g.skills, fitness: 30, communication: 30 }
     if (start.lifestyle === 'dadaba') {
       g.vehicles = ['car']
@@ -1637,7 +1755,8 @@ export const useGame = create<GameState>((set, get) => ({
   applyForJob: (career) => {
     const s = get()
     const c = CAREERS[career]
-    if (s.activity) return toast('Finish your current activity first', 'warn')
+    const busy = busyReason(s)
+    if (busy) return toast(busy, 'warn')
     if (s.nearDest !== c.workplace) return toast(`Walk to ${DEST_BY_ID[c.workplace].name} to apply`, 'warn')
     if (s.employment === career) return toast('You already work here', 'info')
     const prog = s.careers[career]
@@ -1688,7 +1807,29 @@ export const useGame = create<GameState>((set, get) => ({
     const lines = [eff.text, ...applyEffect(d, eff)]
     if (eff.custom) {
       const fit = levelFromXp(d.skills.fitness)
-      if (eff.custom === 'mug_hand') {
+      if (eff.custom === 'tenant_cash' || eff.custom === 'tenant_court' || eff.custom === 'tenant_stay') {
+        const key = ctx.lease ?? ''
+        const name = rentOutName(key)
+        const t = d.tenants[key] ?? {}
+        const weekly = rentOutRange(d, key)[1] * 7
+        if (eff.custom === 'tenant_cash') {
+          const pay = weekly * 2
+          if (d.money < pay) lines.push(`You need ${formatMoney(pay)} for cash for keys. They stay for now.`)
+          else {
+            spend(d, pay, `Cash for keys: ${name}`, 'fee')
+            d.tenants = { ...d.tenants, [key]: { until: d.minutes + 1440 } }
+            lines.push(`💸 Paid ${formatMoney(pay)}. They will be out of ${name} by tomorrow. Unpaid rent is forgiven.`)
+          }
+        } else if (eff.custom === 'tenant_court') {
+          if (d.money < 350) lines.push('You cannot afford the GH₵350 court fee. They stay for now.')
+          else {
+            spend(d, 350, `Rent tribunal: ${name}`, 'fee')
+            d.tenants = { ...d.tenants, [key]: { ...t, until: d.minutes + 4 * 1440, court: true } }
+            lines.push(`⚖️ The tribunal granted an eviction order. Bailiffs remove them from ${name} on Day ${dayOf(d.minutes + 4 * 1440)}.`)
+            if (t.owed) lines.push(`🧾 Their ${formatMoney(t.owed)} of unpaid rent is written off.`)
+          }
+        } else lines.push(`🏠 The lease on ${name} continues.`)
+      } else if (eff.custom === 'mug_hand') {
         const lost = Math.round(d.money * 0.4)
         spend(d, lost, 'Robbed at night', 'fee')
         lines.push(`💸 You lost ${formatMoney(lost)}. Keep savings in the bank.`)
@@ -1741,7 +1882,7 @@ export const useGame = create<GameState>((set, get) => ({
         const odds = OFFICERS[off].accept + (friendPoints(d, 'boateng') >= NPC_BY_ID.boateng.perk.friendAt && off !== 'honest' ? 0.1 : 0)
         if (d.money < cost) {
           lines.push('You fumble for money you do not have. The officer is not amused.')
-          if (eff.custom === 'arrest_bribe') arrest(d, ctx.offence === 'soliciting' ? 'soliciting' : 'theft')
+          if (eff.custom === 'arrest_bribe') arrest(d, ctx.offence === 'soliciting' ? 'soliciting' : ctx.offence === 'robbery' ? 'robbery' : 'theft')
           else { spend(d, Math.min(d.money, 100), 'Traffic fine', 'fee'); lines.push('🧾 Fined instead.') }
         } else if (Math.random() < odds) {
           spend(d, cost, '“Something for the boys”', 'fee')
@@ -1753,7 +1894,7 @@ export const useGame = create<GameState>((set, get) => ({
           d.legal.heat = Math.min(100, d.legal.heat + 20)
         }
       } else if (eff.custom === 'arrest_quiet') {
-        arrest(d, ctx.offence === 'soliciting' ? 'soliciting' : ctx.offence === 'licence' ? 'licence' : 'theft')
+        arrest(d, ctx.offence === 'soliciting' ? 'soliciting' : ctx.offence === 'licence' ? 'licence' : ctx.offence === 'robbery' ? 'robbery' : 'theft')
       } else if ((eff.custom === 'hook_home' || eff.custom === 'hook_guest') && d.hookup) {
         const home = eff.custom === 'hook_home'
         if (home) {
@@ -1777,13 +1918,13 @@ export const useGame = create<GameState>((set, get) => ({
           reward: 0, skillXp: {}, careerXp: 0, cost: 0, startedAt: d.minutes, effect: 'intimate',
         }
       } else if (eff.custom === 'stop_fine') {
-        const fine = ctx.offence === 'red light' ? 100 : 20
+        const fine = ctx.offence === 'red light' ? 100 : ctx.offence === 'suspicion' ? 60 : 20
         spend(d, Math.min(d.money, fine), `Official fine: ${ctx.offence ?? 'traffic'}`, 'fee')
         lines.push(`🧾 Paid the official ${formatMoney(fine)} fine. Receipt in hand.`)
       } else if (eff.custom === 'stop_argue') {
         if (Math.random() < 0.4) lines.push('🗣️ The officer sighs and waves you on.')
         else {
-          const fine = (ctx.offence === 'red light' ? 100 : 20) * 2
+          const fine = (ctx.offence === 'red light' ? 100 : ctx.offence === 'suspicion' ? 60 : 20) * 2
           spend(d, Math.min(d.money, fine), `Fine (doubled): ${ctx.offence ?? 'traffic'}`, 'fee')
           lines.push(`🧾 Arguing made it worse: ${formatMoney(fine)} fine.`)
         }
@@ -1836,7 +1977,8 @@ export const useGame = create<GameState>((set, get) => ({
   startTalk: (npcId) => {
     const s = get()
     const npc = NPC_BY_ID[npcId]
-    if (s.activity) return toast('Finish your current activity first', 'warn')
+    const busy = busyReason(s)
+    if (busy) return toast(busy, 'warn')
     if (s.nearDest !== npc.destId) return toast(`Walk to ${DEST_BY_ID[npc.destId].name} first`, 'warn')
     const f = s.friendships[npcId]
     const today = dayOf(s.minutes)
@@ -1869,7 +2011,9 @@ export const useGame = create<GameState>((set, get) => ({
 
   enterHome: () => {
     const s = get()
-    if (s.activity) return
+    const busy = busyReason(s)
+    if (busy) return toast(busy, 'warn')
+    if (s.housing.homeless) return toast(`🔒 Locked out. ${landlordName(s)} evicted you. Rent a room again from Home → Move in.`, 'bad')
     if (s.nearDest !== homeDestId(s)) return toast('Walk to your home first', 'warn')
     cancelPath()
     const d = draft(s)
@@ -1882,7 +2026,8 @@ export const useGame = create<GameState>((set, get) => ({
 
   exitHome: () => {
     const s = get()
-    if (s.activity) return toast('Finish your current activity first', 'warn')
+    const busy = busyReason(s)
+    if (busy) return toast(busy, 'warn')
     const destId = s.viewing ? HOME_DEST[s.viewing] : homeDestId(s)
     const door = DEST_BY_ID[destId].door
     teleport(door.x + 0.5, door.z + 0.5)
@@ -1955,10 +2100,15 @@ export const useGame = create<GameState>((set, get) => ({
 
   moveHome: (tier, plotId) => {
     const s = get()
-    if (s.activity) return toast('Finish your current activity first', 'warn')
+    const busy = busyReason(s)
+    if (busy) return toast(busy, 'warn')
     // a basic room can be in any compound house; remember which one
-    const roomDest = tier === 'room' && plotId && DEST_BY_ID[plotId]?.homeTier === 'room' ? plotId : s.housing.roomDest ?? null
-    if (tier === s.housing.tier && (tier === 'room' ? roomDest === s.housing.roomDest : tier !== 'house' || plotId === s.housing.plotId)) return
+    // evicted: the old landlady will not take you back, so find another compound house
+    const fresh = s.housing.homeless && tier === 'room' && !(plotId && DEST_BY_ID[plotId]?.homeTier === 'room')
+      ? Object.values(ROOM_HOMES_ALL).flat().filter((id) => id !== s.housing.roomDest)
+      : []
+    const roomDest = tier === 'room' && plotId && DEST_BY_ID[plotId]?.homeTier === 'room' ? plotId : fresh.length ? fresh[Math.floor(Math.random() * fresh.length)] : s.housing.roomDest ?? null
+    if (!s.housing.homeless && tier === s.housing.tier && (tier === 'room' ? roomDest === s.housing.roomDest : tier !== 'house' || plotId === s.housing.plotId)) return
     const home = HOMES[tier]
     const owned = s.owned.includes(tier)
     if (tier === 'house') {
@@ -1987,14 +2137,15 @@ export const useGame = create<GameState>((set, get) => ({
     teleport(d.player.x, d.player.z)
     set(d)
     useUI.setState({ panel: 'none', editMode: false, holdingUid: null, selectedFurniture: null })
-    toast(`🏡 You moved into the ${home.name}!`, 'good')
+    toast(tier === 'room' && roomDest ? `🏡 You rented a room at ${DEST_BY_ID[roomDest]?.name ?? 'a compound house'}. ${ROOM_LANDLORD[roomDest] ?? 'The landlady'} hands you the key.` : `🏡 You moved into the ${home.name}!`, 'good')
   },
 
   enterBuilding: (destId) => {
     const s = get()
     const dd = DEST_BY_ID[destId]
     if (!dd) return
-    if (s.activity) return toast('Finish your current activity first', 'warn')
+    const busy = busyReason(s)
+    if (busy) return toast(busy, 'warn')
     if (dd.homeTier) {
       if (destId === homeDestId(s)) return get().enterHome()
       if (dd.kind !== 'home' || s.nearDest !== destId) return useUI.getState().selectDest(destId, true)
@@ -2017,7 +2168,8 @@ export const useGame = create<GameState>((set, get) => ({
   exitBuilding: () => {
     const s = get()
     if (s.view !== 'inside' || !s.insideDest) return
-    if (s.activity) return toast('Finish your current activity first', 'warn')
+    const busy = busyReason(s)
+    if (busy) return toast(busy, 'warn')
     const dd = DEST_BY_ID[s.insideDest]
     teleport(dd.door.x + 0.5, dd.door.z + 0.5)
     set({ view: 'world', insideDest: null, nearDest: dd.id, player: { x: dd.door.x + 0.5, z: dd.door.z + 0.5, rot: 0 } })
@@ -2031,7 +2183,8 @@ export const useGame = create<GameState>((set, get) => ({
     const s = get()
     const to = DEST_BY_ID[destId]
     if (!to) return
-    if (s.activity) return toast('Finish your current activity first', 'warn')
+    const busy = busyReason(s)
+    if (busy) return toast(busy, 'warn')
     if (mode === 'trotro') {
       // trotros only run between stations
       const here = s.view === 'inside' ? s.insideDest : s.nearDest
@@ -2417,7 +2570,8 @@ export const useGame = create<GameState>((set, get) => ({
   startDriving: (v) => {
     const s = get()
     const def = VEHICLES[v]
-    if (s.activity) return toast('Finish your current activity first', 'warn')
+    const busy = busyReason(s)
+    if (busy) return toast(busy, 'warn')
     if (def.license && !s.license) return toast('You need a driving licence from the DVLA', 'warn')
     if (s.needs.energy < 20) return toast('Too tired to drive safely', 'warn')
     const d = draft(s)
@@ -2517,7 +2671,8 @@ export const useGame = create<GameState>((set, get) => ({
     if (tier === 'house') return toast('Sell a built house by selling its plot', 'info')
     if (!s.owned.includes(tier) || !h.buy) return
     if (s.housing.tier === tier) return toast('Move out first: rent or move into another home, then sell this one', 'warn')
-    if (s.activity) return toast('Finish your current activity first', 'warn')
+    const busy = busyReason(s)
+    if (busy) return toast(busy, 'warn')
     const d = draft(s)
     const price = Math.round(h.buy * HOME_SELL_BACK)
     earn(d, price, `Sold: ${h.name}`, 'bonus')
@@ -2533,12 +2688,21 @@ export const useGame = create<GameState>((set, get) => ({
   toggleRentOut: (key) => {
     const s = get()
     if (s.rentedOut.includes(key)) {
-      set({ rentedOut: s.rentedOut.filter((k) => k !== key) })
-      return toast(`🔑 Tenants gave notice. ${rentOutName(key)} is empty again.`, 'info')
+      const t = s.tenants[key] ?? {}
+      if (t.until !== undefined) return toast(`🔑 Your tenants are already leaving ${rentOutName(key)} on Day ${dayOf(t.until)}.`, 'info')
+      const busy = busyReason(s)
+      if (busy) return toast(busy, 'warn')
+      // tenants who owe rent, and some others, dig in
+      if ((t.owed ?? 0) > 0 || Math.random() < 0.35) {
+        set({ event: { id: 'tenant_refuse', ctx: { lease: key } } })
+        return
+      }
+      set({ tenants: { ...s.tenants, [key]: { ...t, until: s.minutes + 2 * 1440 } } })
+      return toast(`📜 Notice served. Your tenants will leave ${rentOutName(key)} within 2 days. No rent meanwhile.`, 'info')
     }
     if (!canRentOut(s, key)) return toast('You can only rent out a finished home you own and do not live in', 'warn')
     const [lo, hi] = rentOutRange(s, key)
-    set({ rentedOut: [...s.rentedOut, key] })
+    set({ rentedOut: [...s.rentedOut, key], tenants: { ...s.tenants, [key]: {} } })
     toast(`🏠 ${rentOutName(key)} is let! Rent of ${lo === hi ? formatMoney(lo) : `${formatMoney(lo)}–${formatMoney(hi)}`} a day lands every morning.`, 'good')
   },
 
@@ -2612,3 +2776,13 @@ useGame.subscribe((s) => {
 if (typeof window !== 'undefined' && (process.env.NODE_ENV === 'development' || new URLSearchParams(window.location.search).has('debug'))) (window as unknown as { __game: typeof useGame }).__game = useGame
 
 export { efficiency, activitiesForDest }
+
+// freeze the player while an event (police stop, arrest, robbery…) or custody/jail is on screen
+useGame.subscribe((s) => {
+  const frozen = !!s.event || s.activity?.kind === 'custody' || s.activity?.kind === 'jail'
+  if (frozen && !runtime.frozen) {
+    cancelPath()
+    runtime.insideTarget = null
+  }
+  runtime.frozen = frozen
+})

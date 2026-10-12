@@ -219,7 +219,7 @@ export function Beach({ w, d, color, accent }: MP) {
         </group>
       ))}
       {/* horse */}
-      <group ref={t} position={[1.0, 0, -1.0]}>
+      <group ref={t} position={[1.0, 0, -1.0]} userData={{ noMerge: true }}>
         <Part p={[0, 0.75, 0]} s={[0.35, 0.4, 0.95]} c="#7a4e2d" />
         <Part p={[0, 1.05, 0.5]} s={[0.22, 0.5, 0.25]} r={[0.5, 0, 0]} c="#7a4e2d" />
         {[[0.12, 0.35], [-0.12, 0.35], [0.12, -0.35], [-0.12, -0.35]].map(([x, z], i) => (
@@ -266,7 +266,7 @@ export function Lighthouse({ color, accent }: MP) {
         <Part key={i} g="cyl" p={[-0.3, 0.6 + i * 1.1, -0.3]} s={[0.55 - i * 0.03, 1.1, 0.55 - i * 0.03]} c={i % 2 ? accent : color} />
       ))}
       <Part g="cyl" p={[-0.3, 7.0, -0.3]} s={[0.55, 0.12, 0.55]} c="#2b2b2b" />
-      <mesh ref={lamp} position={[-0.3, 7.4, -0.3]}>
+      <mesh ref={lamp} position={[-0.3, 7.4, -0.3]} userData={{ noMerge: true }}>
         <cylinderGeometry args={[0.32, 0.32, 0.6, 8]} />
         <primitive object={bulbMat} attach="material" />
       </mesh>
@@ -330,7 +330,7 @@ export function Plot({ w, d, id }: MP & { id: string }) {
       {busy && (
         <group position={[w / 2 - 0.3, 0, -d / 2 + 0.4]}>
           <Part p={[0, 2.2, 0]} s={[0.15, 4.4, 0.15]} c="#f1b82d" />
-          <group ref={crane} position={[0, 4.4, 0]}>
+          <group ref={crane} position={[0, 4.4, 0]} userData={{ noMerge: true }}>
             <Part p={[-1, 0, 0]} s={[2.4, 0.12, 0.12]} c="#f1b82d" />
             <Part p={[-1.9, -0.6, 0]} s={[0.03, 1.2, 0.03]} c="#333" />
           </group>
@@ -504,7 +504,7 @@ export function Arena({ w, d, color, accent, doorX }: MP) {
       {/* entrance canopy and sign */}
       <Part p={[doorX, 0.95, bd / 2 + 0.1]} s={[2.6, 0.12, 0.9]} c="#f4f1ea" />
       <Door x={doorX} z={bd / 2 - 0.55} w={1.6} h={1.5} c="#2b2d42" />
-      <mesh ref={glow} position={[doorX, 2.05, bd / 2 - 0.3]}>
+      <mesh ref={glow} position={[doorX, 2.05, bd / 2 - 0.3]} userData={{ noMerge: true }}>
         <boxGeometry args={[3.2, 0.32, 0.05]} />
         <meshStandardMaterial color="#111" emissive="#ff2d95" emissiveIntensity={0.6} />
       </mesh>
@@ -735,7 +735,7 @@ export function TemaPort({ w, d }: MP) {
       {[-w / 2 + 1, 0, w / 2 - 1].map((x) => <Part key={x} g="cyl" p={[x, 0.45, d / 2 - 0.3]} s={[0.12, 0.2, 0.12]} c="#222" />)}
       {stacks}
       {/* two gantry cranes */}
-      <group ref={crane}>
+      <group ref={crane} userData={{ noMerge: true }}>
         {[-w / 4, w / 4].map((x) => (
           <group key={x} position={[x, 0, d / 2 - 1.4]}>
             {[-0.7, 0.7].map((dx) => [-0.5, 0.5].map((dz) => <Part key={`${dx}${dz}`} p={[dx, 2.2, dz]} s={[0.14, 4.4, 0.14]} c="#e0524a" />))}

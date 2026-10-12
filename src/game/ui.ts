@@ -19,6 +19,24 @@ export interface Settings {
   autosave: boolean
   /** 18+ content (hook-ups, night work). Off by default. */
   mature: boolean
+  /** Graphics picked by the game for this device (and lowered when it struggles) until the player chooses one. */
+  qualityAuto: boolean
+}
+/** Phones and tablets, judged by touch input and screen size. */
+export function isMobileDevice(): boolean {
+  if (typeof window === 'undefined') return false
+  const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false
+  return coarse || Math.min(window.innerWidth, window.innerHeight) < 600
+}
+/** Starting graphics for this device: phones get no shadows and a lighter crowd. */
+export function detectQuality(): Quality {
+  if (typeof window === 'undefined') return 'high'
+  const nav = navigator as Navigator & { deviceMemory?: number }
+  const cores = nav.hardwareConcurrency ?? 4
+  const mem = nav.deviceMemory ?? 4
+  if (isMobileDevice()) return 'low'
+  if (cores <= 4 || mem <= 4) return 'medium'
+  return 'high'
 }
 export const DEFAULT_SETTINGS: Settings = {
   master: 0.7,
@@ -32,7 +50,11 @@ export const DEFAULT_SETTINGS: Settings = {
   highContrast: false,
   autosave: true,
   mature: false,
+  qualityAuto: true,
 }
+
+/** Best to worst. */
+export const QUALITY_ORDER: Quality[] = ['high', 'medium', 'low', 'minimal']
 
 export interface QualityPreset {
   dpr: [number, number]
@@ -46,7 +68,7 @@ export interface QualityPreset {
 export const QUALITY: Record<Quality, QualityPreset> = {
   high: { dpr: [1, 2], shadows: true, shadowMap: 2048, peds: 26, cars: 12, treeDensity: 1, antialias: true },
   medium: { dpr: [1, 1.5], shadows: true, shadowMap: 1024, peds: 14, cars: 8, treeDensity: 0.8, antialias: true },
-  low: { dpr: [1, 1], shadows: false, shadowMap: 512, peds: 6, cars: 4, treeDensity: 0.5, antialias: false },
+  low: { dpr: [1, 1.25], shadows: false, shadowMap: 512, peds: 6, cars: 4, treeDensity: 0.5, antialias: false },
   minimal: { dpr: [0.75, 0.75], shadows: false, shadowMap: 512, peds: 0, cars: 2, treeDensity: 0.25, antialias: false },
 }
 
@@ -98,6 +120,8 @@ interface UIState {
   rideCam: 'inside' | 'chase'
   holdRot: 0 | 1
   selectedFurniture: number | null
+  /** Pedestrian picked as a robbery target (index into the ambient crowd). */
+  robTarget: number | null
   trackedDest: string | null
   helpSeen: boolean
   /** Destination whose transport options sheet is open. */
@@ -118,8 +142,10 @@ function loadSettings(): Settings {
   if (typeof window === 'undefined') return DEFAULT_SETTINGS
   try {
     const raw = localStorage.getItem(GAME_CONFIG.save.settingsKey)
-    if (!raw) return DEFAULT_SETTINGS
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) }
+    const s: Settings = raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : { ...DEFAULT_SETTINGS }
+    // auto: the device's pick, or lower if the game already had to step down here
+    if (s.qualityAuto) s.quality = QUALITY_ORDER[Math.max(QUALITY_ORDER.indexOf(detectQuality()), QUALITY_ORDER.indexOf(s.quality))] ?? detectQuality()
+    return s
   } catch {
     return DEFAULT_SETTINGS
   }
@@ -142,6 +168,7 @@ export const useUI = create<UIState>((set, get) => ({
   editMode: false,
   holdingUid: null,
   dragUid: null,
+  robTarget: null,
   rideCam: 'inside',
   holdRot: 0,
   selectedFurniture: null,

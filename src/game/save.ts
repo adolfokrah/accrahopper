@@ -1,5 +1,5 @@
 import { BALANCE, GAME_CONFIG, clamp } from './config'
-import { CAREERS, DEST_BY_ID, FURNITURE, HOMES, ILLNESSES, OUTDOOR_KINDS, PLOT_BY_ID, PROJECTS, homeDestId } from './content'
+import { CAREERS, DEST_BY_ID, EVENTS, FURNITURE, HOMES, ILLNESSES, OFFICERS, OUTDOOR_KINDS, PLOT_BY_ID, PROJECTS, homeDestId } from './content'
 import { freshGame, useGame, type SavedGame } from './store'
 import { MAP_H, MAP_W, walkable } from './world'
 import type { NeedId, Profile } from './types'
@@ -17,7 +17,7 @@ export interface SaveEnvelope {
 const SAVE_KEYS: (keyof SavedGame)[] = [
   'profile', 'minutes', 'money', 'needs', 'skills', 'careers', 'employment', 'housing', 'inventory', 'friendships',
   'transactions', 'player', 'view', 'insideDest', 'viewing', 'tutorial', 'stats', 'daily', 'activity', 'event', 'result', 'eventCooldownUntil',
-  'rentWarnedFor', 'lowFlags', 'nextId', 'health', 'legal', 'romance', 'edu', 'owned', 'plots', 'license', 'vehicles', 'rentedDay', 'upgrades', 'rentedOut', 'homeStyle', 'bank',
+  'rentWarnedFor', 'lowFlags', 'nextId', 'health', 'legal', 'romance', 'edu', 'owned', 'plots', 'license', 'vehicles', 'rentedDay', 'upgrades', 'rentedOut', 'tenants', 'homeStyle', 'bank',
   'invest', 'tasks', 'today', 'goals', 'goalsActive', 'lifeFlags', 'visited', 'chats', 'chatUnread', 'chatDay', 'groups', 'loan', 'credit', 'items', 'ticket', 'businesses',
 ]
 
@@ -90,7 +90,12 @@ function sanitize(raw: unknown): SavedGame {
   if (g.daily && typeof g.daily === 'object') for (const [k, v] of Object.entries<any>(g.daily)) if (v && isNum(v.day) && isNum(v.n)) out.daily[k] = { day: v.day, n: v.n }
   const a = g.activity
   out.activity = a && isNum(a.total) && isNum(a.done) && isNum(a.scale) && a.total > 0 && typeof a.label === 'string' && a.needs && typeof a.needs === 'object' ? a : null
-  out.event = null
+  // a police stop or arrest survives a reload, so refreshing the page is no way out
+  const ev = g.event
+  const held = ev && typeof ev.id === 'string' && ['arrest_offer', 'police_stop', 'checkpoint'].includes(ev.id) && ev.id in EVENTS
+  out.event = held
+    ? { id: ev.id, ctx: { ...(typeof ev.ctx?.offence === 'string' ? { offence: ev.ctx.offence } : {}), ...(typeof ev.ctx?.officer === 'string' && ev.ctx.officer in OFFICERS ? { officer: ev.ctx.officer } : {}) } }
+    : null
   out.result = null
   out.eventCooldownUntil = isNum(g.eventCooldownUntil) ? g.eventCooldownUntil : out.minutes + 360
   out.rentWarnedFor = isNum(g.rentWarnedFor) ? g.rentWarnedFor : 0
@@ -129,11 +134,16 @@ function sanitize(raw: unknown): SavedGame {
   }
   if (obj(g.housing) && typeof g.housing.plotId === 'string' && out.plots[g.housing.plotId]) out.housing.plotId = g.housing.plotId
   if (obj(g.housing) && typeof g.housing.roomDest === 'string' && DEST_BY_ID[g.housing.roomDest]?.homeTier === 'room') out.housing.roomDest = g.housing.roomDest
+  if (obj(g.housing) && g.housing.homeless === true && out.housing.tier === 'room') out.housing.homeless = true
   if (out.activity && (out.activity as { ctx?: { drive?: boolean } }).ctx?.drive) out.activity = null
   if (obj(g.upgrades)) out.upgrades = g.upgrades
   out.goalsActive = Array.isArray(g.goalsActive) ? g.goalsActive.filter((k: unknown) => typeof k === 'string') : []
   out.lifeFlags = obj(g.lifeFlags) ? Object.fromEntries(Object.entries<unknown>(g.lifeFlags).filter(([, v]) => isNum(v))) as Record<string, number> : {}
   out.rentedOut = Array.isArray(g.rentedOut) ? g.rentedOut.filter((k: unknown) => typeof k === 'string') : []
+  out.tenants = {}
+  if (obj(g.tenants))
+    for (const [k, v] of Object.entries<any>(g.tenants))
+      if (obj(v) && out.rentedOut.includes(k)) out.tenants[k] = { ...(isNum(v.owed) ? { owed: v.owed } : {}), ...(isNum(v.until) ? { until: v.until } : {}), ...(v.court ? { court: true } : {}) }
   out.homeStyle = {}
   if (obj(g.homeStyle))
     for (const [tier, st] of Object.entries<any>(g.homeStyle)) {
