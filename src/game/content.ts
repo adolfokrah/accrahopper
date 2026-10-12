@@ -5,6 +5,7 @@ import type {
   DistrictId,
   FurnitureType,
   HomeTier,
+  Lifestyle,
   Needs,
   SkillId,
   TraitId,
@@ -396,7 +397,7 @@ export const ROOM_HOMES: Record<string, string> = { nima: 'home_room' }
 }
 
 /** How you start life in Accra. */
-export type Lifestyle = 'hustler' | 'worker' | 'dadaba'
+export type { Lifestyle }
 export const LIFESTYLES: Record<Lifestyle, { name: string; emoji: string; blurb: string; money: number; tier: HomeTier; prepaidWeeks: number; perks: string[] }> = {
   hustler: { name: 'Hustler', emoji: '💪', blurb: 'Nothing in your pocket but big dreams. Start from the bottom.', money: 80, tier: 'room', prepaidWeeks: 1, perks: ['GH₵80 cash', 'Basic room, first week paid', 'Fitness and Communication head start'] },
   worker: { name: 'Working class', emoji: '🧑🏾‍💼', blurb: 'A little saved up and a room of your own. The classic start.', money: 300, tier: 'room', prepaidWeeks: 1, perks: ['GH₵300 cash', 'Basic room, first week paid'] },

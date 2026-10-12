@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { sfx } from '@/game/audio'
 import { dayOf, formatClock, formatDuration, formatMoney } from '@/game/config'
 import { DEST_BY_ID, ILLNESSES, LEGAL, RIDES, type RideMode } from '@/game/content'
-import { GOALS, TASK_BY_ID, rideQuote, taskProgress, trotroPlan, walkMinutes } from '@/game/life'
+import { GOALS, GOAL_BY_ID, TASK_BY_ID, rideQuote, taskProgress, trotroPlan, walkMinutes } from '@/game/life'
 import { takeTrotro, walkToDest } from '@/game/nav'
 import { useGame } from '@/game/store'
 import { useUI } from '@/game/ui'
@@ -126,20 +126,28 @@ export function TasksCard() {
   )
 }
 
+/** Your life goals right now, then what you have already achieved. They change as your life does. */
 export function LifeGoalsList() {
   const s = useGame()
+  const active = s.goalsActive.map((id) => GOAL_BY_ID[id]).filter(Boolean)
+  const done = GOALS.filter((g) => s.goals.includes(g.id))
   return (
     <ul className="goal-list">
-      {GOALS.map((g) => {
-        const done = s.goals.includes(g.id)
-        return (
-          <li key={g.id} className={done ? 'done' : ''}>
-            <span>{done ? '🏆' : g.icon}</span>
-            <b>{g.name}</b>
-            <small>{done ? 'Achieved' : `+${formatMoney(g.reward)}`}</small>
-          </li>
-        )
-      })}
+      {active.length === 0 && <li><span>🌱</span><b>Live your life. New goals will come.</b><small /></li>}
+      {active.map((g) => (
+        <li key={g.id}>
+          <span>{g.icon}</span>
+          <b>{g.name}{g.why && <small className="goal-why">{g.why}</small>}</b>
+          <small>+{formatMoney(g.reward)}</small>
+        </li>
+      ))}
+      {done.map((g) => (
+        <li key={g.id} className="done">
+          <span>🏆</span>
+          <b>{g.name}</b>
+          <small>Achieved</small>
+        </li>
+      ))}
     </ul>
   )
 }

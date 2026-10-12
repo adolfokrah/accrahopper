@@ -71,10 +71,14 @@ export interface Appearance {
   accessory: number
 }
 
+/** How you started life in Accra. */
+export type Lifestyle = 'hustler' | 'worker' | 'dadaba'
 export interface Profile {
   name: string
   appearance: Appearance
   traits: [TraitId, TraitId]
+  /** Older saves have none: treated as working class. */
+  lifestyle?: Lifestyle
 }
 
 export type TxCategory =

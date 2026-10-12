@@ -1,5 +1,5 @@
 import { formatMoney, hourOf } from './config'
-import { DESTINATIONS, DEST_BY_ID, KM_PER_TILE, RIDES, type RideMode } from './content'
+import { DESTINATIONS, DEST_BY_ID, KM_PER_TILE, PROGRAMS, PROJECTS, RIDES, projectStages, type Lifestyle, type RideMode } from './content'
 import type { GameState } from './store'
 
 export const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -65,31 +65,87 @@ export function pickTasks(s: Pick<GameState, 'employment' | 'romance' | 'bank'>,
 }
 
 /* ------------------------------ life goals ------------------------------ */
+/**
+ * Life goals follow your life. Each goal can
+ *  - appear when your situation calls for it (base goals appear at the start),
+ *  - be achieved (cash reward), or
+ *  - drop away when life changes and it no longer makes sense.
+ * Repeatable goals can come back (e.g. getting well every time you fall sick).
+ */
 export interface GoalDef {
   id: string
   name: string
   icon: string
   reward: number
+  /** Why this goal is on your list (shown under it). */
+  why?: string
+  /** Only for these lifestyles (default: everyone). */
+  for?: Lifestyle[]
+  /** When it shows up (default: from the start). */
+  appear?: (s: GameState) => boolean
   test: (s: GameState) => boolean
+  /** Life moved on: quietly remove it without a reward. */
+  drop?: (s: GameState) => boolean
+  repeat?: boolean
 }
 const careerLevels = (s: GameState) => Object.values(s.careers).map((c) => c?.level ?? 0)
+const wealth = (s: GameState) => s.money + s.bank.balance
+const flag = (s: GameState, k: string) => (s.lifeFlags ?? {})[k] !== undefined
+const daysSince = (s: GameState, k: string) => (flag(s, k) ? (s.minutes - s.lifeFlags[k]) / 1440 : 0)
+const builtPlot = (s: GameState) => Object.values(s.plots).some((p) => p.owned && p.stage >= projectStages(p.project).length)
+const earningProperty = (s: GameState) =>
+  s.rentedOut.length > 0 || Object.values(s.plots).some((p) => p.owned && p.stage >= projectStages(p.project).length && !!PROJECTS[p.project ?? 'bungalow'].income)
+const NOT_RICH: Lifestyle[] = ['hustler', 'worker']
+
 export const GOALS: GoalDef[] = [
-  { id: 'job', name: 'Land your first job', icon: '💼', reward: 50, test: (s) => !!s.employment },
-  { id: 'promo', name: 'Get promoted', icon: '📈', reward: 150, test: (s) => careerLevels(s).some((l) => l >= 2) },
-  { id: 'top', name: 'Reach the top of a career', icon: '🏆', reward: 800, test: (s) => careerLevels(s).some((l) => l >= 3) },
+  /* ---- everyone ---- */
+  { id: 'job', name: 'Land your first job', icon: '💼', reward: 50, appear: (s) => !flag(s, 'fired'), test: (s) => !!s.employment },
+  { id: 'promo', name: 'Get promoted', icon: '📈', reward: 150, appear: (s) => !!s.employment, test: (s) => careerLevels(s).some((l) => l >= 2) },
+  { id: 'top', name: 'Reach the top of a career', icon: '🏆', reward: 800, appear: (s) => careerLevels(s).some((l) => l >= 2), test: (s) => careerLevels(s).some((l) => l >= 3) },
   { id: 'bank', name: 'Open a bank account', icon: '🏦', reward: 30, test: (s) => s.bank.open },
-  { id: 'saver', name: 'Save GH₵5,000 in the bank', icon: '💎', reward: 300, test: (s) => s.bank.balance >= 5000 },
-  { id: 'investor', name: 'Make your first investment', icon: '📊', reward: 80, test: (s) => s.invest.tbills.length > 0 || Object.values(s.invest.shares).some((n) => n > 0) },
-  { id: 'graduate', name: 'Graduate from Legon', icon: '🎓', reward: 400, test: (s) => s.edu.degrees.length > 0 },
   { id: 'friends', name: 'Make 3 good friends', icon: '🤝', reward: 150, test: (s) => Object.values(s.friendships).filter((f) => f.points >= 40).length >= 3 },
-  { id: 'love', name: 'Find love', icon: '💕', reward: 100, test: (s) => !!s.romance.partner },
-  { id: 'married', name: 'Get married', icon: '💍', reward: 1000, test: (s) => s.romance.stage === 'married' },
-  { id: 'land', name: 'Buy land', icon: '🗺️', reward: 300, test: (s) => Object.values(s.plots).some((p) => p.owned) },
-  { id: 'licence', name: 'Get a driving licence', icon: '🪪', reward: 100, test: (s) => s.license },
-  { id: 'wheels', name: 'Own a vehicle', icon: '🚗', reward: 300, test: (s) => s.vehicles.length > 0 },
-  { id: 'house', name: 'Own a house', icon: '🏡', reward: 1500, test: (s) => s.owned.length > 0 },
+  { id: 'love', name: 'Find love', icon: '💕', reward: 100, appear: (s) => !flag(s, 'breakup'), test: (s) => !!s.romance.partner },
   { id: 'tourist', name: 'See Accra: beach, park, Jamestown & club', icon: '📸', reward: 150, test: (s) => ['beach', 'park', 'jamestown', 'lounge'].every((d) => s.visited.includes(d)) },
+  { id: 'land', name: 'Buy land', icon: '🗺️', reward: 300, appear: (s) => wealth(s) >= 2000, why: 'You have some money now. Land only gets dearer.', test: (s) => Object.values(s.plots).some((p) => p.owned) },
+  { id: 'house', name: 'Own a house', icon: '🏡', reward: 1500, appear: (s) => wealth(s) >= 5000 || Object.values(s.plots).some((p) => p.owned), test: (s) => s.owned.length > 0 },
+  { id: 'graduate', name: 'Graduate from Legon', icon: '🎓', reward: 400, appear: (s) => !!s.edu.program, why: 'You enrolled. Finish what you started.', test: (s) => s.edu.degrees.length > 0, drop: (s) => !s.edu.program && !s.edu.degrees.length },
+  { id: 'investor', name: 'Make your first investment', icon: '📊', reward: 80, appear: (s) => s.bank.open, test: (s) => s.invest.tbills.length > 0 || Object.values(s.invest.shares).some((n) => n > 0) },
+
+  /* ---- hustler: from the bottom ---- */
+  { id: 'h_1k', name: 'From nothing to GH₵1,000', icon: '💪', reward: 150, for: ['hustler'], test: (s) => wealth(s) >= 1000 },
+  { id: 'h_moveout', name: 'Move out of the compound', icon: '🚪', reward: 250, for: ['hustler'], appear: (s) => wealth(s) >= 800, why: 'You can almost afford better. Time to level up.', test: (s) => s.housing.tier !== 'room' },
+  { id: 'h_biz', name: 'Start your own business', icon: '🏪', reward: 400, for: ['hustler'], appear: (s) => wealth(s) >= 1500, test: (s) => Object.keys(s.businesses).length > 0 },
+
+  /* ---- working class ---- */
+  { id: 'saver', name: 'Save GH₵5,000 in the bank', icon: '💎', reward: 300, for: NOT_RICH, appear: (s) => s.bank.open, test: (s) => s.bank.balance >= 5000 },
+  { id: 'licence', name: 'Get a driving licence', icon: '🪪', reward: 100, for: NOT_RICH, test: (s) => s.license },
+  { id: 'wheels', name: 'Own a vehicle', icon: '🚗', reward: 300, for: NOT_RICH, appear: (s) => s.license || wealth(s) >= 3000, test: (s) => s.vehicles.length > 0 },
+
+  /* ---- dada ba: prove yourself ---- */
+  { id: 'd_work', name: 'Work 10 shifts like everyone else', icon: '🧹', reward: 300, for: ['dadaba'], why: 'Prove you are more than your parents’ money.', test: (s) => s.stats.shiftsCompleted >= 10 },
+  { id: 'd_rent', name: 'Pay your own rent', icon: '🧾', reward: 400, for: ['dadaba'], appear: (s) => s.minutes > s.housing.nextRentDue - 3 * 1440, why: 'Your parents’ prepaid rent runs out soon.', test: (s) => s.transactions.some((t) => t.category === 'rent') },
+  { id: 'd_landlord', name: 'Become a landlord', icon: '🏘️', reward: 800, for: ['dadaba'], test: (s) => earningProperty(s) },
+  { id: 'd_saver', name: 'Grow your money to GH₵20,000', icon: '💎', reward: 1000, for: ['dadaba'], test: (s) => wealth(s) >= 20000 },
+
+  /* ---- life happens ---- */
+  { id: 's_well', name: 'Get well again', icon: '🩺', reward: 20, repeat: true, appear: (s) => !!s.health.illness, why: 'You are sick. See a doctor or a pharmacy.', test: (s) => !s.health.illness },
+  { id: 's_loan', name: 'Pay off your loan', icon: '🧾', reward: 50, repeat: true, appear: (s) => !!s.loan, why: 'Debt is heavy. Clear it before it grows.', test: (s) => !s.loan },
+  { id: 's_newjob', name: 'Find a new job', icon: '🔍', reward: 60, repeat: true, appear: (s) => flag(s, 'fired') && !s.employment, why: 'You lost your job. Get back on your feet.', test: (s) => !!s.employment },
+  { id: 's_broke', name: 'Get back on your feet (GH₵300)', icon: '🪙', reward: 40, repeat: true, appear: (s) => wealth(s) < 30 && s.minutes > 1440, why: 'Money is very tight right now.', test: (s) => wealth(s) >= 300 },
+  { id: 's_clean', name: 'Stay out of trouble for a week', icon: '😇', reward: 150, appear: (s) => s.legal.record > 0, why: 'You have a criminal record. Keep your head down.', test: (s) => s.legal.heat < 15 && daysSince(s, 'trouble') >= 7 },
+  { id: 's_engaged', name: 'Get engaged', icon: '💍', reward: 200, appear: (s) => !!s.romance.partner && s.romance.dates >= 2, test: (s) => s.romance.stage === 'engaged' || s.romance.stage === 'married', drop: (s) => !s.romance.partner },
+  { id: 'married', name: 'Get married', icon: '💒', reward: 1000, appear: (s) => s.romance.stage === 'engaged', test: (s) => s.romance.stage === 'married', drop: (s) => !s.romance.partner },
+  { id: 's_lovelost', name: 'Find love again', icon: '❤️‍🩹', reward: 100, repeat: true, appear: (s) => flag(s, 'breakup') && !s.romance.partner, why: 'Heartbreak hurts. Time heals.', test: (s) => !!s.romance.partner },
+  { id: 's_family', name: 'Build a home for your family', icon: '👨‍👩‍👧', reward: 600, appear: (s) => s.romance.stage === 'married', test: (s) => s.owned.length > 0, drop: (s) => s.romance.stage !== 'married' },
+  { id: 's_build', name: 'Build on your land', icon: '🏗️', reward: 400, appear: (s) => Object.values(s.plots).some((p) => p.owned), test: (s) => builtPlot(s), drop: (s) => !Object.values(s.plots).some((p) => p.owned) },
+  { id: 's_rent', name: 'Earn rent from a property', icon: '🔑', reward: 300, for: NOT_RICH, appear: (s) => builtPlot(s) || s.owned.some((t) => t !== 'house' && t !== s.housing.tier), test: (s) => earningProperty(s) },
+  { id: 's_field', name: 'Work in your field', icon: '🎯', reward: 200, appear: (s) => s.edu.degrees.length > 0, why: 'Your degree pays more in the right job.', test: (s) => !!s.employment && s.edu.degrees.some((p) => PROGRAMS[p].career === s.employment) },
+  { id: 's_bizup', name: 'Grow a business to level 3', icon: '📈', reward: 400, appear: (s) => Object.keys(s.businesses).length > 0, test: (s) => Object.values(s.businesses).some((b) => b.level >= 3), drop: (s) => Object.keys(s.businesses).length === 0 },
+  { id: 's_moveup', name: 'Move back up', icon: '⬆️', reward: 150, repeat: true, appear: (s) => flag(s, 'evicted') && s.housing.tier === 'room', why: 'You lost your home over rent. Climb back.', test: (s) => s.housing.tier !== 'room' },
 ]
+export const GOAL_BY_ID: Record<string, GoalDef> = Object.fromEntries(GOALS.map((g) => [g.id, g]))
+/** Whether a goal belongs to this character's life at all. */
+export const goalFits = (s: GameState, g: GoalDef) => !g.for || g.for.includes(s.profile?.lifestyle ?? 'worker')
 
 /* ------------------------------ transport ------------------------------ */
 export interface RideQuote {

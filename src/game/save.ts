@@ -18,7 +18,7 @@ const SAVE_KEYS: (keyof SavedGame)[] = [
   'profile', 'minutes', 'money', 'needs', 'skills', 'careers', 'employment', 'housing', 'inventory', 'friendships',
   'transactions', 'player', 'view', 'insideDest', 'viewing', 'tutorial', 'stats', 'daily', 'activity', 'event', 'result', 'eventCooldownUntil',
   'rentWarnedFor', 'lowFlags', 'nextId', 'health', 'legal', 'romance', 'edu', 'owned', 'plots', 'license', 'vehicles', 'rentedDay', 'upgrades', 'rentedOut', 'homeStyle', 'bank',
-  'invest', 'tasks', 'today', 'goals', 'visited', 'chats', 'chatUnread', 'chatDay', 'groups', 'loan', 'credit', 'items', 'ticket', 'businesses',
+  'invest', 'tasks', 'today', 'goals', 'goalsActive', 'lifeFlags', 'visited', 'chats', 'chatUnread', 'chatDay', 'groups', 'loan', 'credit', 'items', 'ticket', 'businesses',
 ]
 
 export function serialize(): SaveEnvelope {
@@ -131,6 +131,8 @@ function sanitize(raw: unknown): SavedGame {
   if (obj(g.housing) && typeof g.housing.roomDest === 'string' && DEST_BY_ID[g.housing.roomDest]?.homeTier === 'room') out.housing.roomDest = g.housing.roomDest
   if (out.activity && (out.activity as { ctx?: { drive?: boolean } }).ctx?.drive) out.activity = null
   if (obj(g.upgrades)) out.upgrades = g.upgrades
+  out.goalsActive = Array.isArray(g.goalsActive) ? g.goalsActive.filter((k: unknown) => typeof k === 'string') : []
+  out.lifeFlags = obj(g.lifeFlags) ? Object.fromEntries(Object.entries<unknown>(g.lifeFlags).filter(([, v]) => isNum(v))) as Record<string, number> : {}
   out.rentedOut = Array.isArray(g.rentedOut) ? g.rentedOut.filter((k: unknown) => typeof k === 'string') : []
   out.homeStyle = {}
   if (obj(g.homeStyle))

@@ -4056,3 +4056,10 @@ button.ios-row:active {
   margin-top: -40px;
   filter: drop-shadow(0 0 6px rgba(255, 230, 140, 0.9));
 }
+.goal-why {
+  display: block;
+  font-weight: 500;
+  font-size: 0.78em;
+  color: var(--muted);
+  margin-top: 1px;
+}

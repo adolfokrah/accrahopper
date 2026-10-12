@@ -837,7 +837,7 @@ function Goals() {
         })}
       </Group>
       <section className="ios-section">
-        <h4>Life goals · {s.goals.length}/{GOALS_COUNT}</h4>
+        <h4>Life goals · {s.goalsActive.length} active · {s.goals.length} achieved</h4>
         <div className="ios-group pad"><LifeGoalsList /></div>
       </section>
     </AppShell>
@@ -916,4 +916,3 @@ export function PhonePanel() {
 }
 
 export { TITLES }
-const GOALS_COUNT = GOALS.length

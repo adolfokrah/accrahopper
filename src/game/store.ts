@@ -74,7 +74,7 @@ import { cancelPath, runtime, teleport } from './runtime'
 import { nearestJunction, roadRoute } from './world'
 import { plotValue } from './property'
 import { clockRef, useUI } from './ui'
-import { GOALS, TASK_BY_ID, pickTasks, rideQuote, taskProgress, isSunday } from './life'
+import { GOALS, GOAL_BY_ID, TASK_BY_ID, goalFits, pickTasks, rideQuote, taskProgress, isSunday } from './life'
 import { PLAYER_START, districtAt } from './world'
 import type {
   ShiftState,
@@ -157,6 +157,10 @@ export interface GameState {
   tasks: { day: number; ids: string[]; done: string[] }
   today: Record<string, number>
   goals: string[]
+  /** Life goals you are working toward right now (they come and go with your life). */
+  goalsActive: string[]
+  /** When big life events last happened (fired, breakup, evicted, trouble): game minute. */
+  lifeFlags: Record<string, number>
   visited: string[]
   chats: Record<string, ChatMsg[]>
   chatUnread: Record<string, number>
@@ -312,6 +316,8 @@ export const freshGame = (profile: Profile | null): SavedGame => ({
   tasks: { day: 1, ids: pickTasks({ employment: null, romance: { partner: null }, bank: { open: false } } as never, 1), done: [] },
   today: {},
   goals: [],
+  goalsActive: [],
+  lifeFlags: {},
   visited: [],
   chats: {},
   chatUnread: {},
@@ -600,6 +606,7 @@ function finishActivity(d: GameState) {
         lines.push('🚪 Too many bad shifts. You were sacked.')
         toast(`😞 You were fired from ${CAREERS[a.ctx.career].name}. Do more tasks next time.`, 'bad')
         d.employment = null
+        lifeEvent(d, 'fired')
         prog.warns = 0
       } else lines.push(`⚠️ Warning ${prog.warns}/3 from your boss: do more tasks during your shift.`)
     } else if (a.shift && perf >= 0.85) {
@@ -927,7 +934,13 @@ export function rollOfficer(): Officer {
   return r < 0.45 ? 'greedy' : r < 0.8 ? 'cautious' : 'honest'
 }
 
+/** Remember a big life event so goals can react to it. */
+function lifeEvent(d: GameState, key: string) {
+  d.lifeFlags = { ...d.lifeFlags, [key]: d.minutes }
+}
+
 function arrest(d: GameState, charge: keyof typeof CHARGES = 'theft') {
+  lifeEvent(d, 'trouble')
   d.legal.heat = 0
   d.legal = { ...d.legal, charge: CHARGES[charge].name, fine: CHARGES[charge].fine }
   enterPlace(d, 'police')
@@ -940,6 +953,7 @@ function arrest(d: GameState, charge: keyof typeof CHARGES = 'theft') {
 }
 
 function sendToJail(d: GameState, days: number, reason: string) {
+  lifeEvent(d, 'trouble')
   d.legal.caseDeadline = null
   d.legal.record++
   enterPlace(d, 'police')
@@ -987,6 +1001,7 @@ function afterIntimacy(d: GameState, lines: string[], riskNoCondom: number) {
   if (pid && Math.random() < 0.3) {
     addFriendship(d, pid, -40)
     lines.push(`💔 ${NPC_BY_ID[pid].name} found out and ended things.`)
+    lifeEvent(d, 'breakup')
     d.romance = { partner: null, stage: null, dates: 0, ring: d.romance.ring, askedDay: dayOf(d.minutes) }
   }
 }
@@ -1186,16 +1201,47 @@ function dayChange(d: GameState) {
   if (d.tutorial.done) toast(`📋 New day, new tasks! ${isSunday(day) ? 'It is Sunday.' : ''}`, 'info')
 }
 
+/** Life goals follow your life: new ones appear, finished ones pay out, irrelevant ones drop away. */
 function checkGoals(d: GameState) {
-  for (const g of GOALS) {
-    if (d.goals.includes(g.id)) continue
+  // first run (new game or an older save): fill the list quietly
+  const quiet = d.lifeFlags.goalsInit === undefined
+  let active = d.goalsActive.filter((id) => GOAL_BY_ID[id])
+  let done = d.goals
+  for (const id of [...active]) {
+    const g = GOAL_BY_ID[id]
     if (g.test(d)) {
-      d.goals = [...d.goals, g.id]
+      active = active.filter((x) => x !== id)
+      if (!g.repeat && !done.includes(id)) done = [...done, id]
+      if (g.repeat) lifeEvent(d, `done:${id}`)
+      if (g.id === 's_newjob') d.lifeFlags = Object.fromEntries(Object.entries(d.lifeFlags).filter(([k]) => k !== 'fired'))
+      if (g.id === 's_lovelost') d.lifeFlags = Object.fromEntries(Object.entries(d.lifeFlags).filter(([k]) => k !== 'breakup'))
+      if (g.id === 's_moveup') d.lifeFlags = Object.fromEntries(Object.entries(d.lifeFlags).filter(([k]) => k !== 'evicted'))
       d.money += g.reward
       pushTx(d, `Life goal: ${g.name}`, g.reward, 'bonus')
-      toast(`🏆 Life goal achieved: ${g.name} (+${formatMoney(g.reward)})`, 'good')
+      if (!quiet) toast(`🏆 Life goal achieved: ${g.name} (+${formatMoney(g.reward)})`, 'good')
+    } else if (g.drop?.(d)) {
+      active = active.filter((x) => x !== id)
+      if (!quiet) toast(`🔄 Life changed: “${g.name}” is no longer a goal.`, 'info')
     }
   }
+  for (const g of GOALS) {
+    if (active.includes(g.id) || (!g.repeat && done.includes(g.id)) || !goalFits(d, g)) continue
+    if (g.appear && !g.appear(d)) continue
+    // repeatable goals wait a little before coming back
+    if (g.repeat && d.lifeFlags[`done:${g.id}`] !== undefined && d.minutes - d.lifeFlags[`done:${g.id}`] < 60) continue
+    // already true the moment it would appear: count it as achieved straight away (once), but never for repeat goals
+    if (g.test(d)) {
+      if (g.repeat || quiet) {
+        if (!g.repeat) done = [...done, g.id]
+        continue
+      }
+    }
+    active = [...active, g.id]
+    if (!quiet) toast(`🎯 New life goal: ${g.name}${g.why ? `. ${g.why}` : ''}`, 'info')
+  }
+  d.goalsActive = active
+  d.goals = done
+  if (quiet) d.lifeFlags = { ...d.lifeFlags, goalsInit: d.minutes }
 }
 
 function timeEffects(d: GameState, prev: number) {
@@ -1314,6 +1360,7 @@ function timeEffects(d: GameState, prev: number) {
       toast(`🏠 Overdue rent paid${fee ? ` with ${formatMoney(fee)} late fee` : ''}.`, 'good')
     } else if (now - h.overdueSince >= BALANCE.rentGraceHours * 60) {
       if (h.tier !== 'room') {
+        lifeEvent(d, 'evicted')
         h.tier = 'room'
         h.overdueSince = null
         h.nextRentDue = now + BALANCE.rentDays * 1440
@@ -1408,7 +1455,7 @@ export const useGame = create<GameState>((set, get) => ({
   ...freshGame(null),
 
   startNewGame: (profile, start = { lifestyle: 'worker', area: 'nima' }) => {
-    const g = freshGame(profile)
+    const g = freshGame({ ...profile, lifestyle: start.lifestyle })
     const life = LIFESTYLES[start.lifestyle]
     g.money = life.money
     g.housing = { tier: life.tier, nextRentDue: g.minutes + BALANCE.rentDays * 1440 * life.prepaidWeeks, overdueSince: null, roomDest: ROOM_HOMES[start.area] ?? 'home_room' }
@@ -2122,6 +2169,7 @@ export const useGame = create<GameState>((set, get) => ({
     if (!pid) return
     const d = draft(s)
     addFriendship(d, pid, -20)
+    lifeEvent(d, 'breakup')
     d.romance = { partner: null, stage: null, dates: 0, ring: d.romance.ring, askedDay: dayOf(d.minutes) }
     toast(`💔 You and ${NPC_BY_ID[pid].name} broke up.`, 'info')
     set(d)
