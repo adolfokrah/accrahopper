@@ -1,8 +1,8 @@
 'use client'
 import { useState } from 'react'
 import { sfx } from '@/game/audio'
-import { ACCESSORIES, DEFAULT_APPEARANCE, HAIRSTYLES, HAIR_COLORS, OUTFITS, OUTFIT_COLORS, SKIN_TONES, TRAITS, TRAIT_IDS } from '@/game/content'
-import { GAME_CONFIG, formatMoney, BALANCE } from '@/game/config'
+import { ACCESSORIES, AREA_BY_ID, DEFAULT_APPEARANCE, HAIRSTYLES, HAIR_COLORS, LIFESTYLES, OUTFITS, OUTFIT_COLORS, ROOM_HOMES, SKIN_TONES, START_AREAS, TRAITS, TRAIT_IDS, type Lifestyle } from '@/game/content'
+import { GAME_CONFIG } from '@/game/config'
 import { saveNow } from '@/game/save'
 import { useGame } from '@/game/store'
 import type { Appearance, TraitId } from '@/game/types'
@@ -16,13 +16,16 @@ export function Creator() {
   const [name, setName] = useState('')
   const [a, setA] = useState<Appearance>({ ...DEFAULT_APPEARANCE })
   const [traits, setTraits] = useState<TraitId[]>([])
+  const [life, setLife] = useState<Lifestyle>('worker')
+  const [area, setArea] = useState<string>('nima')
+  const areas = START_AREAS.filter((id) => ROOM_HOMES[id])
   const set = (p: Partial<Appearance>) => setA((x) => ({ ...x, ...p }))
   const toggle = (t: TraitId) => setTraits((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : cur.length >= 2 ? cur : [...cur, t]))
   const ok = name.trim().length >= 2 && traits.length === 2
   const rand = (n: number) => Math.floor(Math.random() * n)
   const start = () => {
     if (!ok) return
-    useGame.getState().startNewGame({ name: name.trim().slice(0, 16), appearance: a, traits: [traits[0], traits[1]] })
+    useGame.getState().startNewGame({ name: name.trim().slice(0, 16), appearance: a, traits: [traits[0], traits[1]] }, { lifestyle: life, area })
     sfx('start')
     saveNow()
   }
@@ -32,7 +35,7 @@ export function Creator() {
         <header className="creator-head">
           <button className="btn ghost small" onClick={() => useGame.setState({ screen: 'menu' })}>← Back</button>
           <h1>Create your character</h1>
-          <p>Welcome to {GAME_CONFIG.cityName}. You start with {formatMoney(BALANCE.startMoney)} and a rented room.</p>
+          <p>Welcome to {GAME_CONFIG.cityName}. Choose who you are and where your story starts.</p>
         </header>
         <div className="creator-grid">
           <div className="creator-preview">
@@ -67,6 +70,38 @@ export function Creator() {
               )
             })}
           </div>
+        </div>
+        <div className="traits">
+          <label className="lbl">Your lifestyle</label>
+          <div className="trait-grid">
+            {(Object.keys(LIFESTYLES) as Lifestyle[]).map((id) => {
+              const L = LIFESTYLES[id]
+              const on = life === id
+              return (
+                <button key={id} className={`trait ${on ? 'on' : ''}`} onClick={() => { sfx('click'); setLife(id) }} aria-pressed={on}>
+                  <span className="trait-emoji">{L.emoji}</span>
+                  <b>{L.name}</b>
+                  <small>{L.blurb}</small>
+                  <small className="muted">{L.perks.join(' · ')}</small>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        <div className="traits">
+          <label className="lbl">Where you live</label>
+          {life === 'dadaba' ? (
+            <small className="muted">Rich kids start in the East Legon Villa. You can move anywhere later.</small>
+          ) : (
+            <div className="pills" role="group" aria-label="Start neighbourhood">
+              {areas.map((id) => (
+                <button key={id} className={`pill ${area === id ? 'on' : ''}`} aria-pressed={area === id} onClick={() => { sfx('click'); setArea(id) }}>
+                  {AREA_BY_ID[id].name}
+                </button>
+              ))}
+            </div>
+          )}
+          {life !== 'dadaba' && <small className="muted">{AREA_BY_ID[area]?.blurb}</small>}
         </div>
         <footer className="creator-foot">
           <Btn onClick={start} disabled={!ok}>Start my story →</Btn>

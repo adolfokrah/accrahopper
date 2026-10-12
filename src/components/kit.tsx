@@ -2,7 +2,8 @@
 import type { ReactNode } from 'react'
 import { sfx } from '@/game/audio'
 
-export function Sheet({ title, icon, subtitle, onClose, children, footer }: { title: string; icon?: string; subtitle?: ReactNode; onClose?: () => void; children: ReactNode; footer?: ReactNode }) {
+/** `minimize`: the button folds the sheet down to its header (used while you are inside a place) instead of closing it. */
+export function Sheet({ title, icon, subtitle, onClose, children, footer, minimize }: { title: string; icon?: string; subtitle?: ReactNode; onClose?: () => void; children: ReactNode; footer?: ReactNode; minimize?: boolean }) {
   return (
     <section className="sheet" role="dialog" aria-label={title}>
       <header className="sheet-head">
@@ -12,8 +13,8 @@ export function Sheet({ title, icon, subtitle, onClose, children, footer }: { ti
           {subtitle && <div className="sheet-sub">{subtitle}</div>}
         </div>
         {onClose && (
-          <button className="icon-btn" onClick={() => { sfx('click'); onClose() }} aria-label="Close">
-            ✕
+          <button className="icon-btn" onClick={() => { sfx('click'); onClose() }} aria-label={minimize ? 'Minimize' : 'Close'} title={minimize ? 'Minimize' : 'Close'}>
+            {minimize ? '▾' : '✕'}
           </button>
         )}
       </header>

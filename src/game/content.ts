@@ -361,6 +361,48 @@ export const DESTINATIONS: Destination[] = [
   dest({ id: 'harbour', name: 'Jamestown Harbour', kind: 'harbour', area: 'jamestown', emoji: '⚓', pos: at(2, 6, 4, 3, 6), color: '#8a6a3f', accent: '#2a9d8f', hours: [0, 24], blurb: 'Fishing canoes by day. Quiet deals by night.' }),
 ]
 
+/* ------------------------------ where you can start ------------------------------ */
+/** Neighbourhoods with a compound house where a new player can rent a basic room. Nima is the original. */
+export const START_AREAS = ['nima', 'madina', 'kaneshie', 'jamestown', 'teshie', 'ashaiman', 'dome', 'mallam'] as const
+/** Basic-room compound house per start area (destination id). */
+export const ROOM_HOMES: Record<string, string> = { nima: 'home_room' }
+{
+  const taken = DESTINATIONS.map((d) => ({ x: d.x - 1, z: d.z - 1, w: d.w + 2, d: d.d + 2 }))
+  const hits = (x: number, z: number, w: number, d: number) => taken.some((t) => x < t.x + t.w && x + w > t.x && z < t.z + t.d && z + d > t.z)
+  for (const areaId of START_AREAS) {
+    if (ROOM_HOMES[areaId]) continue
+    const area = AREA_BY_ID[areaId]
+    if (!area) continue
+    let placed = false
+    for (let c = -2; c <= 13 && !placed; c++)
+      for (let r = -2; r <= 9 && !placed; r++)
+        for (const xoff of [0, 4]) {
+          const p = at(c, r, 6, 5, xoff)
+          if (p.x < 1 || p.z < 1 || p.x + p.w > 236 || p.z + p.d > 168) continue
+          if (areaAt(p.x + 3, p.z + 2.5).id !== areaId) continue
+          const safe = clearOfRoads(p)
+          if (safe.x !== p.x || safe.z !== p.z || safe.w !== p.w || safe.d !== p.d) continue
+          if ([p.x, p.x + p.w].some((x) => p.z + p.d + 5 > coastZ(x))) continue
+          if (Math.hypot(p.x + 3 - LAGOON.x, p.z + 2.5 - LAGOON.z) < LAGOON.r * 1.8 + 4) continue
+          if (hits(p.x, p.z, p.w, p.d)) continue
+          const id = `home_room_${areaId}`
+          DESTINATIONS.push(dest({ id, name: `${area.name.split(' & ')[0]} Compound House`, kind: 'home', area: areaId, emoji: '🏠', pos: p, color: '#f2c9a0', accent: '#a0522d', hours: [0, 24], blurb: 'A rented room in a busy family compound house.', homeTier: 'room' }))
+          taken.push({ x: p.x - 1, z: p.z - 1, w: p.w + 2, d: p.d + 2 })
+          ROOM_HOMES[areaId] = id
+          placed = true
+          break
+        }
+  }
+}
+
+/** How you start life in Accra. */
+export type Lifestyle = 'hustler' | 'worker' | 'dadaba'
+export const LIFESTYLES: Record<Lifestyle, { name: string; emoji: string; blurb: string; money: number; tier: HomeTier; prepaidWeeks: number; perks: string[] }> = {
+  hustler: { name: 'Hustler', emoji: '💪', blurb: 'Nothing in your pocket but big dreams. Start from the bottom.', money: 80, tier: 'room', prepaidWeeks: 1, perks: ['GH₵80 cash', 'Basic room, first week paid', 'Fitness and Communication head start'] },
+  worker: { name: 'Working class', emoji: '🧑🏾‍💼', blurb: 'A little saved up and a room of your own. The classic start.', money: 300, tier: 'room', prepaidWeeks: 1, perks: ['GH₵300 cash', 'Basic room, first week paid'] },
+  dadaba: { name: 'Dada ba (rich kid)', emoji: '💎', blurb: 'Born with a silver spoon. Your parents set you up in East Legon.', money: 6000, tier: 'premium', prepaidWeeks: 4, perks: ['GH₵6,000 cash', 'East Legon Villa, 4 weeks rent paid', 'Your own car and a driving licence'] },
+}
+
 /* ------------------------------ land for sale ------------------------------ */
 /** Land prices, growth and land-guard risk by kind of neighbourhood. */
 const LAND: Record<AreaStyle, { price: number; growth: number; guards: number; blurb: string }> = {
@@ -421,7 +463,8 @@ const GEN_PLOTS: { dest: Destination; price: number; growth: number; guardRisk: 
 export const DEST_BY_ID: Record<string, Destination> = Object.fromEntries(DESTINATIONS.map((d) => [d.id, d]))
 export const HOME_DEST: Record<HomeTier, string> = { room: 'home_room', apartment: 'apartment', premium: 'home_premium', house: 'plot_dansoman' }
 /** The destination you live at (houses live on the plot you built on). */
-export const homeDestId = (s: { housing: { tier: HomeTier; plotId?: string | null } }) => (s.housing.tier === 'house' && s.housing.plotId ? s.housing.plotId : HOME_DEST[s.housing.tier])
+export const homeDestId = (s: { housing: { tier: HomeTier; plotId?: string | null; roomDest?: string | null } }) =>
+  s.housing.tier === 'house' && s.housing.plotId ? s.housing.plotId : s.housing.tier === 'room' && s.housing.roomDest ? s.housing.roomDest : HOME_DEST[s.housing.tier]
 /** Places you visit outdoors (no walk-in interior). */
 export const OUTDOOR_KINDS: DestKind[] = ['plot']
 export const STOPS = DESTINATIONS.filter((d) => d.kind === 'stop')

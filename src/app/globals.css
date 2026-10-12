@@ -3908,3 +3908,90 @@ button.ios-row:active {
 @media (max-width: 760px) {
   .left-col { width: min(330px, calc(100% - 64px)); }
 }
+
+/* ---- place panel folded down to its header while you are inside ---- */
+.panel-slot.min {
+  display: flex;
+  align-items: flex-start;
+  bottom: auto;
+}
+.sheet-min {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 10px 14px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.sheet-min .sheet-title b { display: block; font-size: 1rem; }
+.sheet-min .sheet-title small { color: var(--muted); font-size: 0.78rem; }
+.sheet-min .icon-btn { display: grid; place-items: center; }
+@media (max-width: 760px) {
+  .panel-slot.min {
+    top: auto;
+    bottom: calc(74px + env(safe-area-inset-bottom));
+  }
+  /* an activity bar uses the same spot on phones */
+  .hud:has(.bottom-stack > *) .panel-slot.min {
+    display: none;
+  }
+}
+
+/* ---- phones: let panels scroll inside instead of growing off-screen ---- */
+.sheet-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+@media (max-width: 760px) {
+  .panel-slot.open {
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+  /* the slot only has a max-height here, so pass it on to the sheet */
+  .panel-slot.open > .sheet {
+    max-height: inherit;
+    min-height: 0;
+  }
+  .creator {
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    align-items: flex-start;
+  }
+}
+/* items inside a scrolling panel keep their size so the panel scrolls instead of squashing them */
+.sheet-body > * {
+  flex-shrink: 0;
+}
+
+/* ---- goal card and door prompt sit in the stack right above the bottom navigation ---- */
+.bottom-stack .enter-prompt {
+  position: static;
+  transform: none;
+  align-self: center;
+}
+.bottom-stack .objective .obj-head { padding: 11px 13px; }
+.bottom-stack .objective .obj-head b { font-size: 1.02rem; }
+.bottom-stack .objective .obj-tag { font-size: 0.72rem; padding: 3px 8px; }
+.bottom-stack .objective .obj-body { font-size: 0.92rem; padding: 0 13px 12px; }
+/* keep the stack from covering the city: long goal text scrolls */
+.bottom-stack {
+  max-height: calc(100% - 180px);
+}
+.bottom-stack > .objective {
+  max-height: 40vh;
+  overflow-y: auto;
+}
+@media (max-width: 760px) {
+  /* phones: the folded place panel moves to the top so it never fights the stack */
+  .panel-slot.min {
+    top: calc(92px + env(safe-area-inset-top));
+    bottom: auto;
+  }
+  .hud:has(.bottom-stack > *) .panel-slot.min {
+    display: flex;
+  }
+}

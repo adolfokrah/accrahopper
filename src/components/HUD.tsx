@@ -535,6 +535,39 @@ function EnterPrompt() {
   )
 }
 
+/** Inside a building (or at home) the place panel never closes: it folds down to this bar. Tap to open it again. */
+function MinimizedPanel() {
+  const view = useGame((s) => s.view)
+  const inside = useGame((s) => s.insideDest)
+  const viewing = useGame((s) => s.viewing)
+  const tier = useGame((s) => s.housing.tier)
+  const panel = useUI((s) => s.panel)
+  if (panel !== 'none') return null
+  let icon = ''
+  let title = ''
+  let open: (() => void) | null = null
+  if (view === 'inside' && inside && DEST_BY_ID[inside]) {
+    icon = DEST_BY_ID[inside].emoji
+    title = DEST_BY_ID[inside].name
+    open = () => useUI.getState().selectDest(inside, true)
+  } else if (view === 'home') {
+    icon = viewing ? '🔑' : '🏠'
+    title = viewing ? `Viewing: ${HOMES[viewing].name}` : HOMES[tier].name
+    open = () => useUI.getState().setPanel('home')
+  }
+  if (!open) return null
+  const go = open
+  return (
+    <div className="panel-slot min">
+      <button className="sheet sheet-min" onClick={() => { sfx('click'); go() }} aria-label={`Open ${title}`}>
+        <span className="sheet-icon">{icon}</span>
+        <span className="sheet-title"><b>{title}</b><small>Tap for things to do here</small></span>
+        <span className="icon-btn" aria-hidden>▴</span>
+      </button>
+    </div>
+  )
+}
+
 function Fade() {
   const view = useGame((s) => s.view)
   const inside = useGame((s) => s.insideDest)
@@ -560,14 +593,14 @@ export function HUD() {
   return (
     <div className="hud">
       <TopBar />
-      <div className="left-col">
-        <Journal />
-      </div>
       <ViewControls />
+      {/* stacked right above the bottom navigation: alerts, activity, the door you are at, then your goal */}
       <div className="bottom-stack">
         <LowFundsHelp />
         <ResultCard />
         <ActivityBar />
+        <EnterPrompt />
+        <Journal />
       </div>
       <BottomNav />
       {panel === 'phone' && <PhonePanel />}
@@ -577,7 +610,7 @@ export function HUD() {
         {panel === 'home' && <HomePanel />}
         {panel === 'settings' && <SettingsPanel />}
       </div>
-      <EnterPrompt />
+      <MinimizedPanel />
       <Fade />
       <Toasts />
       <EventModal />

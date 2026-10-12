@@ -193,6 +193,7 @@ function Inside() {
       icon="🏠"
       subtitle={`Comfort ${comfortOf(s.housing.tier, s.inventory, s.upgrades[s.housing.tier] ?? [])} · better comfort means better sleep`}
       onClose={() => useUI.getState().setPanel('none')}
+      minimize
       footer={<Btn kind="ghost" onClick={() => useGame.getState().exitHome()} disabled={!!s.activity}>🚪 Leave home</Btn>}
     >
       <div className="tabs">
@@ -276,7 +277,7 @@ function Viewing() {
   const h = HOMES[t]
   const owned = s.owned.includes(t)
   return (
-    <Sheet title={`Viewing: ${h.name}`} icon="🔑" onClose={() => useUI.getState().setPanel('none')} subtitle={`${owned ? 'You own this home' : `Rent ${formatMoney(h.rent)}/week${h.buy ? ` · buy ${formatMoney(h.buy)}` : ''}`}`}
+    <Sheet title={`Viewing: ${h.name}`} icon="🔑" minimize onClose={() => useUI.getState().setPanel('none')} subtitle={`${owned ? 'You own this home' : `Rent ${formatMoney(h.rent)}/week${h.buy ? ` · buy ${formatMoney(h.buy)}` : ''}`}`}
       footer={<Btn kind="ghost" onClick={() => useGame.getState().exitHome()}>🚪 Leave</Btn>}>
       <p className="blurb">Have a look around. Fixtures shown are included with the home.</p>
       <ul className="amenities">{h.amenities.map((a) => <li key={a}>{a}</li>)}</ul>

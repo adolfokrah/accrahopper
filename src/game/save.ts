@@ -128,6 +128,7 @@ function sanitize(raw: unknown): SavedGame {
     if ((ac.ctx?.dest && !DEST_BY_ID[ac.ctx.dest]) || (ac.travelTo && !DEST_BY_ID[ac.travelTo])) out.activity = null
   }
   if (obj(g.housing) && typeof g.housing.plotId === 'string' && out.plots[g.housing.plotId]) out.housing.plotId = g.housing.plotId
+  if (obj(g.housing) && typeof g.housing.roomDest === 'string' && DEST_BY_ID[g.housing.roomDest]?.homeTier === 'room') out.housing.roomDest = g.housing.roomDest
   if (out.activity && (out.activity as { ctx?: { drive?: boolean } }).ctx?.drive) out.activity = null
   if (obj(g.upgrades)) out.upgrades = g.upgrades
   out.rentedOut = Array.isArray(g.rentedOut) ? g.rentedOut.filter((k: unknown) => typeof k === 'string') : []

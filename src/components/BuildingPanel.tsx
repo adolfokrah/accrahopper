@@ -541,6 +541,7 @@ export function BuildingPanel() {
       title={dest.name}
       icon={dest.emoji}
       onClose={closeIt}
+      minimize={s.view === 'inside' && s.insideDest === id}
       footer={s.view === 'inside' && s.insideDest === id ? <Btn kind="ghost" onClick={() => useGame.getState().exitBuilding()} disabled={!!s.activity}>🚪 Leave building</Btn> : undefined}
       subtitle={
         <>

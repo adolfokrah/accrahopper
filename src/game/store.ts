@@ -62,6 +62,10 @@ import {
   BIZ,
   shiftTaskDef,
   showOn,
+  LIFESTYLES,
+  ROOM_HOMES,
+  AREA_BY_ID,
+  type Lifestyle,
   RENT_OUT,
   SELL_BACK,
 } from './content'
@@ -105,7 +109,7 @@ export interface GameState {
   skills: Record<SkillId, number>
   careers: Partial<Record<CareerId, CareerProgress>>
   employment: CareerId | null
-  housing: { tier: HomeTier; nextRentDue: number; overdueSince: number | null; plotId?: string | null }
+  housing: { tier: HomeTier; nextRentDue: number; overdueSince: number | null; plotId?: string | null; /** Which compound house your basic room is in. */ roomDest?: string | null }
   inventory: OwnedFurniture[]
   friendships: Record<string, Friendship>
   transactions: Tx[]
@@ -159,7 +163,7 @@ export interface GameState {
   chatDay: Record<string, number>
   groups: Record<string, ChatGroup>
 
-  startNewGame: (p: Profile) => void
+  startNewGame: (p: Profile, start?: { lifestyle: Lifestyle; area: string }) => void
   loadFromSave: (saved: SavedGame) => void
   toMenu: () => void
   updateAppearance: (a: Appearance) => void
@@ -659,7 +663,7 @@ function finishActivity(d: GameState) {
       lines.push('🤕 The okada skidded at a corner. You scraped your knee.')
     }
     if (to.homeTier) {
-      if (to.homeTier === d.housing.tier && (to.homeTier !== 'house' || d.owned.includes('house'))) d.view = 'home'
+      if (to.id === homeDestId(d)) d.view = 'home'
     } else if (!OUTDOOR_KINDS.includes(to.kind) && (to.hours[0] === 0 && to.hours[1] === 24 ? true : isOpen(to.hours, hourOf(d.minutes)))) {
       d.view = 'inside'
       d.insideDest = to.id
@@ -1316,7 +1320,7 @@ function timeEffects(d: GameState, prev: number) {
         repositionFurniture(d)
         d.view = 'world'
         d.insideDest = null
-        const door = DEST_BY_ID['home_room'].door
+        const door = DEST_BY_ID[homeDestId(d)].door
         d.player = { x: door.x + 0.5, z: door.z + 0.5, rot: 0 }
         teleport(d.player.x, d.player.z)
         toast('🏚️ You could not pay rent and moved back to the basic room. Your furniture is in storage.', 'bad')
@@ -1403,13 +1407,24 @@ export const useGame = create<GameState>((set, get) => ({
   nearDest: null,
   ...freshGame(null),
 
-  startNewGame: (profile) => {
+  startNewGame: (profile, start = { lifestyle: 'worker', area: 'nima' }) => {
     const g = freshGame(profile)
+    const life = LIFESTYLES[start.lifestyle]
+    g.money = life.money
+    g.housing = { tier: life.tier, nextRentDue: g.minutes + BALANCE.rentDays * 1440 * life.prepaidWeeks, overdueSince: null, roomDest: ROOM_HOMES[start.area] ?? 'home_room' }
+    if (start.lifestyle === 'hustler') g.skills = { ...g.skills, fitness: 30, communication: 30 }
+    if (start.lifestyle === 'dadaba') {
+      g.vehicles = ['car']
+      g.license = true
+    }
+    const home = DEST_BY_ID[homeDestId(g)]
+    g.player = { x: home.door.x + 0.5, z: home.door.z + 0.5, rot: 0 }
     teleport(g.player.x, g.player.z)
     runtime.cam.zoom = 36
-    set({ ...g, screen: 'game', nearDest: 'home_room' })
+    set({ ...g, screen: 'game', nearDest: home.id })
     useUI.setState({ panel: 'none', selectedDest: null, editMode: false, holdingUid: null, dialog: null, paused: false, trackedDest: null, toasts: [], inbox: [], unread: 0 })
-    toast(`Akwaaba to Nima, ${profile.name}! Follow the objective to get started.`, 'good')
+    const where = AREA_BY_ID[home.area]?.name ?? 'Accra'
+    toast(`Akwaaba to ${where}, ${profile.name}! ${start.lifestyle === 'dadaba' ? 'Your parents set you up nicely.' : start.lifestyle === 'hustler' ? 'Time to hustle.' : ''} Follow the objective to get started.`, 'good')
   },
 
   loadFromSave: (saved) => {
@@ -1702,7 +1717,7 @@ export const useGame = create<GameState>((set, get) => ({
           d.player = { x: hd.door.x + 0.5, z: hd.door.z + 0.5, rot: 0 }
           teleport(d.player.x, d.player.z)
           useUI.setState({ panel: 'none' })
-          if (d.housing.tier === 'room' && Math.random() < 0.3) {
+          if (homeDestId(d) === 'home_room' && Math.random() < 0.3) {
             d.needs.social = clamp(d.needs.social - 5)
             lines.push('👵 Auntie Akosua raised an eyebrow as you walked in…')
           }
@@ -1894,7 +1909,9 @@ export const useGame = create<GameState>((set, get) => ({
   moveHome: (tier, plotId) => {
     const s = get()
     if (s.activity) return toast('Finish your current activity first', 'warn')
-    if (tier === s.housing.tier && (tier !== 'house' || plotId === s.housing.plotId)) return
+    // a basic room can be in any compound house; remember which one
+    const roomDest = tier === 'room' && plotId && DEST_BY_ID[plotId]?.homeTier === 'room' ? plotId : s.housing.roomDest ?? null
+    if (tier === s.housing.tier && (tier === 'room' ? roomDest === s.housing.roomDest : tier !== 'house' || plotId === s.housing.plotId)) return
     const home = HOMES[tier]
     const owned = s.owned.includes(tier)
     if (tier === 'house') {
@@ -1912,7 +1929,7 @@ export const useGame = create<GameState>((set, get) => ({
       d.rentedOut = d.rentedOut.filter((k) => k !== lease)
       toast('🔑 Your tenants moved out so you can move in.', 'info')
     }
-    d.housing = { tier, nextRentDue: d.minutes + BALANCE.rentDays * 1440, overdueSince: null, plotId: tier === 'house' ? plotId : null }
+    d.housing = { tier, nextRentDue: d.minutes + BALANCE.rentDays * 1440, overdueSince: null, plotId: tier === 'house' ? plotId : null, roomDest }
     repositionFurniture(d)
     d.view = 'world'
     d.insideDest = null

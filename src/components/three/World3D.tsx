@@ -481,9 +481,11 @@ function PerfMonitor() {
     s.frames = 0
     s.time = 0
     const max = Math.min(q.dpr[1], window.devicePixelRatio || 1)
+    // never go below the quality's own floor (blurry), and treat 30 fps as fine: many phones cap there to save battery
+    const min = Math.min(max, q.dpr[0])
     let next = s.dpr
-    if (fps < 40) next = Math.max(0.6, s.dpr - 0.25)
-    else if (fps > 57) next = Math.min(max, s.dpr + 0.1)
+    if (fps < 24) next = Math.max(min, s.dpr - 0.25)
+    else if (fps > 27) next = Math.min(max, s.dpr + 0.1)
     if (Math.abs(next - s.dpr) > 0.01) {
       s.dpr = next
       setDpr(next)
