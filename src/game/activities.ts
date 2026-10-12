@@ -66,8 +66,9 @@ export function priceMultiplier(s: Pick<GameState, 'profile' | 'friendships'>, d
   return m
 }
 
+/** Hours like [18, 6] run past midnight. */
 export function isOpen(hours: [number, number], h: number) {
-  return h >= hours[0] && h < hours[1]
+  return hours[0] <= hours[1] ? h >= hours[0] && h < hours[1] : h >= hours[0] || h < hours[1]
 }
 const fmtHour = (h: number) => `${h % 12 === 0 ? 12 : h % 12}${h >= 12 && h < 24 ? 'pm' : 'am'}`
 

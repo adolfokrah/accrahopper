@@ -323,10 +323,10 @@ export const DESTINATIONS: Destination[] = [
   // Osu
   dest({ id: 'stadium', name: 'Accra Sports Stadium', kind: 'stadium', area: 'osu', emoji: '🏟️', pos: at(5, 5, 8, 8, 0), color: '#d9dde3', accent: '#ce1126', hours: [8, 23], blurb: 'Hearts of Oak, the Black Stars and five-a-side.' }),
   dest({ id: 'guesthouse_osu', name: 'Osu Cosy Guest House', kind: 'hotel', area: 'osu', emoji: '🛏️', pos: at(5, 6, 5, 4, 1), color: '#f3e1c7', accent: '#8e5bd0', hours: [0, 24], blurb: 'Small, discreet rooms by the night. No questions asked.' }),
-  dest({ id: 'club_osu', name: 'Oxford Street Lounge', kind: 'lounge', area: 'osu', emoji: '🍸', pos: at(6, 5, 6, 5, 0), color: '#2d2a4a', accent: '#ff2d95', hours: [16, 24], blurb: 'Osu nightlife on Oxford Street.' }),
+  dest({ id: 'club_osu', name: 'Oxford Street Lounge', kind: 'lounge', area: 'osu', emoji: '🍸', pos: at(6, 5, 6, 5, 0), color: '#2d2a4a', accent: '#ff2d95', hours: [0, 24], blurb: 'Osu nightlife on Oxford Street.' }),
   dest({ id: 'food_osu', name: 'Osu Night Market Chop Bar', kind: 'food', area: 'osu', emoji: '🍢', pos: at(6, 5, 4, 4, 6), color: '#ffd166', accent: '#e0524a', hours: [10, 24], blurb: 'Kebabs, kenkey and fried yam till late.' }),
   // Labadi
-  dest({ id: 'lounge', name: 'Labadi Beach Club', kind: 'lounge', area: 'labadi', emoji: '🎶', pos: at(7, 5, 8, 6, 0), color: '#3d2c5e', accent: '#fcd116', hours: [12, 24], blurb: 'Afrobeats, highlife, cocktails and sea breeze. Live DJ nights.', npcs: ['efua'] }),
+  dest({ id: 'lounge', name: 'Labadi Beach Club', kind: 'lounge', area: 'labadi', emoji: '🎶', pos: at(7, 5, 8, 6, 0), color: '#3d2c5e', accent: '#fcd116', hours: [0, 24], blurb: 'Afrobeats, highlife, cocktails and sea breeze. Live DJ nights.', npcs: ['efua'] }),
   dest({ id: 'beach', name: 'Labadi Beach', kind: 'beach', area: 'labadi', emoji: '🏖️', pos: at(7, 5, 2, 2, 8), color: '#e9c46a', accent: '#c8553d', hours: [5, 23], blurb: 'Sun, sea, horse rides, coconut and beach football.' }),
   dest({ id: 'hotel_lapalm', name: 'La Palm Royal Beach Hotel', kind: 'hotel', area: 'labadi', emoji: '🏨', pos: at(8, 5, 9, 6, 0), color: '#f7efe2', accent: '#2a9d8f', hours: [0, 24], blurb: 'Beachfront luxury with a lagoon pool.' }),
   dest({ id: 'stop_wf', name: 'Labadi Trotro Stop', kind: 'stop', area: 'labadi', emoji: '🏝️', pos: at(8, 4, 5, 3, 2), color: '#e9d8a6', accent: '#ff9f43', hours: [0, 24], blurb: 'Gateway to the beach.' }),
@@ -1179,13 +1179,13 @@ export const DEST_ACTIVITIES: Record<string, ActivityDef[]> = {
     A({ id: 'gymshower', label: 'Gym shower', blurb: 'Freshen up.', icon: '🚿', kind: 'generic', minutes: 15, cost: 8, needs: { hygiene: 60 } }),
   ],
   lounge: [
-    A({ id: 'hangout', label: 'Dance to Afrobeats', blurb: 'Hit the dance floor.', icon: '💃', kind: 'social', minutes: 90, cost: 40, needs: { fun: 25, social: 20, bladder: -6 }, hours: [12, 24] }),
-    A({ id: 'mocktail', label: 'Drinks at the bar', blurb: 'Sobolo mocktail and a catch-up.', icon: '🍹', kind: 'social', minutes: 60, cost: 25, needs: { fun: 14, social: 10, bladder: -8 }, hours: [12, 24] }),
-    A({ id: 'spray', label: 'Spray money on the dance floor', blurb: 'Make it rain cedis. The crowd loves you, and people notice.', icon: '💸', kind: 'social', minutes: 30, cost: 100, needs: { fun: 30, social: 25 }, effect: 'spray', hours: [18, 24] }),
-    A({ id: 'hookup_m', label: 'Chat up a guy', blurb: '18+. Find a man on the dance floor and see where the night goes.', icon: '😏', kind: 'social', minutes: 45, needs: { social: 10, fun: 6 }, effect: 'hookup_m', require: 'mature', hours: [20, 24], dailyLimit: 2 }),
-    A({ id: 'hookup', label: 'Chat up a girl', blurb: '18+. Find a woman on the dance floor and see where the night goes.', icon: '😏', kind: 'social', minutes: 45, needs: { social: 10, fun: 6 }, effect: 'hookup', require: 'mature', hours: [20, 24], dailyLimit: 2 }),
-    A({ id: 'nightwork', label: 'Night work (ashawo)', blurb: '18+. Illegal in Ghana: risk of police raids, robbery and infection.', icon: '🌙', kind: 'generic', minutes: 180, needs: { energy: -20, social: 5, hygiene: -15 }, effect: 'nightwork', require: 'mature', hours: [20, 24], dailyLimit: 1 }),
-    A({ id: 'livemusic', label: 'Live highlife night', blurb: 'Live band and DJ. Evenings only.', icon: '🎷', kind: 'social', minutes: 120, cost: 60, needs: { fun: 35, social: 25, energy: -6, bladder: -8 }, hours: [18, 24] }),
+    A({ id: 'hangout', label: 'Dance to Afrobeats', blurb: 'Hit the dance floor.', icon: '💃', kind: 'social', minutes: 90, cost: 40, needs: { fun: 25, social: 20, bladder: -6 } }),
+    A({ id: 'mocktail', label: 'Drinks at the bar', blurb: 'Sobolo mocktail and a catch-up.', icon: '🍹', kind: 'social', minutes: 60, cost: 25, needs: { fun: 14, social: 10, bladder: -8 } }),
+    A({ id: 'spray', label: 'Spray money on the dance floor', blurb: 'Make it rain cedis. The crowd loves you, and people notice.', icon: '💸', kind: 'social', minutes: 30, cost: 100, needs: { fun: 30, social: 25 }, effect: 'spray', hours: [18, 6] }),
+    A({ id: 'hookup_m', label: 'Chat up a guy', blurb: '18+. Find a man on the dance floor and see where the night goes.', icon: '😏', kind: 'social', minutes: 45, needs: { social: 10, fun: 6 }, effect: 'hookup_m', require: 'mature', hours: [20, 6], dailyLimit: 2 }),
+    A({ id: 'hookup', label: 'Chat up a girl', blurb: '18+. Find a woman on the dance floor and see where the night goes.', icon: '😏', kind: 'social', minutes: 45, needs: { social: 10, fun: 6 }, effect: 'hookup', require: 'mature', hours: [20, 6], dailyLimit: 2 }),
+    A({ id: 'nightwork', label: 'Night work (ashawo)', blurb: '18+. Illegal in Ghana: risk of police raids, robbery and infection.', icon: '🌙', kind: 'generic', minutes: 180, needs: { energy: -20, social: 5, hygiene: -15 }, effect: 'nightwork', require: 'mature', hours: [20, 5], dailyLimit: 1 }),
+    A({ id: 'livemusic', label: 'Live highlife night', blurb: 'Live band and DJ. Evenings only.', icon: '🎷', kind: 'social', minutes: 120, cost: 60, needs: { fun: 35, social: 25, energy: -6, bladder: -8 }, hours: [18, 2] }),
   ],
   hospital: [
     A({ id: 'consult', label: 'See a doctor', blurb: 'Diagnosis and treatment. Cures any illness.', icon: '🩺', kind: 'generic', minutes: 120, cost: 80, needs: { energy: 5 }, effect: 'consult', require: 'sick' }),
