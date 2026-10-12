@@ -528,21 +528,21 @@ export function TrafficLights() {
   const head = useRef<THREE.InstancedMesh>(null)
   const lamps = useRef<THREE.InstancedMesh>(null)
   const timer = useRef(0)
-  const N = junctions.length * 4
+  // only main-road junctions get signals, with two poles on opposite corners
+  const sig = useMemo(() => junctions.map((j, i) => ({ j, i })).filter((x) => x.j.signal), [])
+  const N = sig.length * 2
   useEffect(() => {
     const m = new THREE.Matrix4()
     const q = new THREE.Quaternion()
     const qy = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI / 2, 0))
-    junctions.forEach((j, ji) => {
+    sig.forEach(({ j }, ji) => {
       // corners just outside the crossing; heads lean in towards the junction
       const corners: [number, number, number, number][] = [
         [j.x - 0.35, j.z - 0.35, 1, 1],
-        [j.x + j.w + 0.35, j.z - 0.35, -1, 1],
         [j.x + j.w + 0.35, j.z + j.d + 0.35, -1, -1],
-        [j.x - 0.35, j.z + j.d + 0.35, 1, -1],
       ]
       corners.forEach(([x, z, sx, sz], c) => {
-        const i = ji * 4 + c
+        const i = ji * 2 + c
         m.compose(new THREE.Vector3(x, 1.0, z), q, new THREE.Vector3(0.05, 2.0, 0.05))
         pole.current?.setMatrixAt(i, m)
         // NS head faces along z, EW head faces along x
@@ -566,7 +566,7 @@ export function TrafficLights() {
     if (timer.current < 0.2 || !lamps.current) return
     timer.current = 0
     const t = runtime.lightT
-    junctions.forEach((_, i) => {
+    sig.forEach(({ i }, si) => {
       const ns = lightFor(i, 'ns', t)
       const ew = lightFor(i, 'ew', t)
       const set = (base: number, st: string) => {
@@ -574,9 +574,9 @@ export function TrafficLights() {
         lamps.current!.setColorAt(base + 1, st === 'yellow' ? LAMP.yellow : LAMP.off)
         lamps.current!.setColorAt(base + 2, st === 'green' ? LAMP.green : LAMP.off)
       }
-      for (let c = 0; c < 4; c++) {
-        set((i * 4 + c) * 6, ns)
-        set((i * 4 + c) * 6 + 3, ew)
+      for (let c = 0; c < 2; c++) {
+        set((si * 2 + c) * 6, ns)
+        set((si * 2 + c) * 6 + 3, ew)
       }
     })
     if (lamps.current.instanceColor) lamps.current.instanceColor.needsUpdate = true

@@ -573,7 +573,8 @@ export const PLAYER_START = { x: DESTINATIONS[0].door.x + 0.5, z: DESTINATIONS[0
 
 /* ------------------------------ traffic lights ------------------------------ */
 /** A signalised junction occupies the 2x2 tiles where a vertical and horizontal street cross. */
-export interface Junction { x: number; z: number; w: number; d: number; offset: number }
+/** `signal`: has visible traffic lights (where a main road crosses); side-street junctions only give way. */
+export interface Junction { x: number; z: number; w: number; d: number; offset: number; signal: boolean }
 export const junctions: Junction[] = []
 const junctionAt = new Int16Array(MAP_W * MAP_H).fill(-1)
 for (const vx of V_STREETS)
@@ -584,7 +585,7 @@ for (const vx of V_STREETS)
     for (let z = z0; z <= z1 && all; z++) for (let x = x0; x <= x1; x++) if (!isRoad(x, z)) { all = false; break }
     if (!all) continue
     const id = junctions.length
-    junctions.push({ x: x0, z: z0, w: x1 - x0 + 1, d: z1 - z0 + 1, offset: ((vx * 7 + hz * 13) % 14) })
+    junctions.push({ x: x0, z: z0, w: x1 - x0 + 1, d: z1 - z0 + 1, offset: ((vx * 7 + hz * 13) % 14), signal: !!(ROAD_CLASS.v[vx] || ROAD_CLASS.h[hz]) })
     for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) junctionAt[idx(x, z)] = id
   }
 /** Centre of a junction rectangle in world units. */

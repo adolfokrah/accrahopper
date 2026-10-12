@@ -2,10 +2,10 @@
 import { useState } from 'react'
 import { sfx } from '@/game/audio'
 import { dayOf, formatClock, formatDuration, formatMoney } from '@/game/config'
-import { DEST_BY_ID, ILLNESSES, LEGAL, RIDES, type RideMode } from '@/game/content'
+import { DEST_BY_ID, ILLNESSES, LEGAL, RIDES, type RideMode, VEHICLES } from '@/game/content'
 import { GOALS, GOAL_BY_ID, TASK_BY_ID, rideQuote, taskProgress, trotroPlan, walkMinutes } from '@/game/life'
 import { takeTrotro, walkToDest } from '@/game/nav'
-import { useGame } from '@/game/store'
+import { useGame, myCar } from '@/game/store'
 import { useUI } from '@/game/ui'
 import { Btn, Meter, Modal } from './kit'
 
@@ -18,6 +18,8 @@ export function TravelSheet() {
   const close = () => useUI.setState({ travelTo: null })
   const modes: RideMode[] = ['okada', 'pragia', 'taxi', 'ride']
   const tro = trotroPlan(s, to)
+  const car = myCar(s)
+  const ownQ = car ? rideQuote(s, 'own', to) : null
   return (
     <Modal label={`Travel to ${d.name}`}>
       <div className="travel-head">
@@ -33,6 +35,13 @@ export function TravelSheet() {
           <span className="t-main"><b>Walk</b><small>Free · exercise and fresh air</small></span>
           <span className="t-meta"><b>Free</b><small>~{formatDuration(walkMinutes(s, to))}</small></span>
         </button>
+        {car && (
+          <button className="choice travel own" disabled={!s.license || s.money < ownQ!.fare || !!s.activity} onClick={() => { sfx('start'); useGame.getState().startRide('own', to) }}>
+            <span className="t-ico">{VEHICLES[car].emoji}</span>
+            <span className="t-main"><b>Drive your {VEHICLES[car].name}</b><small>{s.license ? 'Your own wheels. Fuel only.' : 'You need a driving licence from the DVLA'}</small></span>
+            <span className="t-meta"><b>{formatMoney(ownQ!.fare)}</b><small>~{formatDuration(ownQ!.minutes)}</small></span>
+          </button>
+        )}
         {tro && (
           <button className="choice travel" disabled={s.money < tro.ride.fare || !!s.activity} onClick={() => { sfx('coin'); close(); takeTrotro(to) }}>
             <span className="t-ico">🚐</span>

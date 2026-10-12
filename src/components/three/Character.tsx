@@ -43,6 +43,17 @@ const G = {
   cone: new THREE.ConeGeometry(1, 1, 5),
 }
 G.skirt.translate(0, -0.21, 0)
+/** Smoother body geometry for close-up (non-lite) characters. */
+const GH = {
+  torso: new THREE.CapsuleGeometry(0.16, 0.2, 8, 20),
+  waist: new THREE.CapsuleGeometry(0.13, 0.12, 8, 20),
+  pelvis: new THREE.CapsuleGeometry(0.13, 0.08, 8, 20),
+  upperArm: new THREE.CapsuleGeometry(0.058, 0.16, 6, 14),
+  foreArm: new THREE.CapsuleGeometry(0.05, 0.15, 6, 14),
+  thigh: new THREE.CapsuleGeometry(0.072, 0.18, 6, 14),
+  shin: new THREE.CapsuleGeometry(0.06, 0.18, 6, 14),
+  sphere: new THREE.SphereGeometry(1, 24, 18),
+}
 
 interface J {
   hipL: number; hipR: number; kneeL: number; kneeR: number
@@ -192,6 +203,8 @@ export function Character({ appearance, getMotion, lite = false, scale = 1 }: Pr
   const soleM = M(style === 'sport' || style === 'jersey' ? '#d9d4c8' : '#120d0b')
   const longSleeve = style === 'smart' || style === 'sport' || style === 'hoodie' || style === 'kaftan'
   const cast = !lite
+  // close-ups get smooth geometry; crowds keep the cheap set
+  const B = lite ? G : { ...G, ...GH }
   // build: slim, average or broad
   const bw = [0.88, 1, 1.16][appearance.body ?? 1] ?? 1
   const beard = appearance.beard ?? 0
@@ -199,11 +212,12 @@ export function Character({ appearance, getMotion, lite = false, scale = 1 }: Pr
 
   const leg = (side: -1 | 1, hip: React.RefObject<THREE.Group | null>, knee: React.RefObject<THREE.Group | null>) => (
     <group ref={hip} position={[0.09 * side * bw, -0.04, 0]}>
-      <mesh geometry={G.thigh} material={bottom} position={[0, -0.15, 0]} scale={[bw, 1, bw]} castShadow={cast} />
+      <mesh geometry={B.thigh} material={bottom} position={[0, -0.15, 0]} scale={[bw, 1, bw]} castShadow={cast} />
       {!lite && style === 'sport' && <mesh geometry={G.box} material={M('#f4f4f4')} position={[0.072 * side * bw, -0.15, 0]} scale={[0.012, 0.3, 0.03]} />}
       {!lite && style === 'jersey' && <mesh geometry={G.cyl} material={top} position={[0, -0.04, 0]} scale={[0.085 * bw, 0.1, 0.085 * bw]} />}
       <group ref={knee} position={[0, -0.31, 0]}>
-        <mesh geometry={G.shin} material={bareShin ? skinM : bottom} position={[0, -0.14, 0]} scale={[bw * 0.95 + 0.05, 1, bw * 0.95 + 0.05]} castShadow={cast} />
+        {!lite && <mesh geometry={B.sphere} material={bareShin ? skinM : bottom} scale={0.064 * (0.9 + bw * 0.1)} />}
+        <mesh geometry={B.shin} material={bareShin ? skinM : bottom} position={[0, -0.14, 0]} scale={[bw * 0.95 + 0.05, 1, bw * 0.95 + 0.05]} castShadow={cast} />
         {!lite && style === 'jersey' && <mesh geometry={G.cyl} material={top} position={[0, -0.17, 0]} scale={[0.066, 0.17, 0.066]} />}
         {!lite && style === 'sport' && <mesh geometry={G.box} material={M('#f4f4f4')} position={[0.062 * side, -0.14, 0]} scale={[0.012, 0.3, 0.03]} />}
         <mesh geometry={G.shoe} material={shoeM} position={[0, -0.285, 0.045]} rotation={[Math.PI / 2, 0, 0]} castShadow={cast} />
@@ -213,11 +227,13 @@ export function Character({ appearance, getMotion, lite = false, scale = 1 }: Pr
   )
   const arm = (side: -1 | 1, sh: React.RefObject<THREE.Group | null>, el: React.RefObject<THREE.Group | null>, withProps: boolean) => (
     <group ref={sh} position={[0.235 * side * bw, 0.36, 0]}>
-      <mesh geometry={G.upperArm} material={top} position={[0, -0.12, 0]} scale={[bw, 1, bw]} castShadow={cast} />
+      {!lite && <mesh geometry={B.sphere} material={top} position={[0.005 * side, -0.01, 0]} scale={[0.082 * bw, 0.075, 0.078 * bw]} castShadow={cast} />}
+      <mesh geometry={B.upperArm} material={top} position={[0, -0.12, 0]} scale={[bw, 1, bw]} castShadow={cast} />
       {!lite && style === 'sport' && <mesh geometry={G.box} material={M('#f4f4f4')} position={[0.058 * side * bw, -0.12, 0]} scale={[0.012, 0.24, 0.028]} />}
       {!lite && !longSleeve && <mesh geometry={G.cyl} material={top} position={[0, -0.21, 0]} scale={[0.066 * bw, 0.05, 0.066 * bw]} />}
       <group ref={el} position={[0, -0.25, 0]}>
-        <mesh geometry={G.foreArm} material={longSleeve ? top : skinM} position={[0, -0.1, 0]} scale={[bw * 0.9 + 0.1, 1, bw * 0.9 + 0.1]} castShadow={cast} />
+        {!lite && <mesh geometry={B.sphere} material={longSleeve ? top : skinM} scale={0.054 * (0.9 + bw * 0.1)} />}
+        <mesh geometry={B.foreArm} material={longSleeve ? top : skinM} position={[0, -0.1, 0]} scale={[bw * 0.9 + 0.1, 1, bw * 0.9 + 0.1]} castShadow={cast} />
         {!lite && longSleeve && <mesh geometry={G.cyl} material={style === 'smart' ? M('#f4f4f4') : top} position={[0, -0.19, 0]} scale={[0.056, 0.03, 0.056]} />}
         {/* hand: palm and thumb */}
         <mesh geometry={G.sphere} material={skinM} position={[0, -0.235, 0.005]} scale={[0.048, 0.062, 0.034]} />
@@ -237,7 +253,7 @@ export function Character({ appearance, getMotion, lite = false, scale = 1 }: Pr
     <group scale={scale}>
       <group ref={R.root}>
         <group ref={R.hips} position={[0, 0.66, 0]}>
-          <mesh geometry={G.pelvis} material={style === 'ankara' ? M(outfit.bottom) : style === 'dress' ? top : bottom} rotation={[0, 0, Math.PI / 2]} scale={[1, 1.05 * bw, 0.85 * bw]} castShadow={cast} />
+          <mesh geometry={B.pelvis} material={style === 'ankara' ? M(outfit.bottom) : style === 'dress' ? top : bottom} rotation={[0, 0, Math.PI / 2]} scale={[1, 1.05 * bw, 0.85 * bw]} castShadow={cast} />
           {leg(-1, R.hipL, R.kneeL)}
           {leg(1, R.hipR, R.kneeR)}
           {style === 'ankara' && <mesh geometry={G.skirt} material={M(outfit.bottom)} position={[0, 0.04, 0]} scale={[bw, 1, bw]} castShadow={cast} />}
@@ -246,15 +262,24 @@ export function Character({ appearance, getMotion, lite = false, scale = 1 }: Pr
           {!lite && (style === 'tee' || style === 'smart' || style === 'hoodie') && <mesh geometry={G.cyl} material={M('#2a1d14', 0.4)} position={[0, 0.07, 0]} scale={[0.155 * bw, 0.035, 0.125 * bw]} />}
           {!lite && (style === 'tee' || style === 'smart' || style === 'hoodie') && <mesh geometry={G.box} material={M('#c9a24a', 0.3)} position={[0, 0.07, 0.123 * bw]} scale={[0.04, 0.03, 0.01]} />}
           <group ref={R.spine} position={[0, 0.04, 0]}>
-            <mesh geometry={G.torso} material={top} position={[0, 0.22, 0]} scale={[1.22 * bw, 1, 0.78 * (0.85 + bw * 0.15)]} castShadow={cast} />
+            {lite ? (
+              <mesh geometry={G.torso} material={top} position={[0, 0.22, 0]} scale={[1.22 * bw, 1, 0.78 * (0.85 + bw * 0.15)]} castShadow={cast} />
+            ) : (
+              <>
+                {/* chest broader than the waist, like a real torso */}
+                <mesh geometry={GH.torso} material={top} position={[0, 0.27, 0]} scale={[1.26 * bw, 0.82, 0.8 * (0.85 + bw * 0.15)]} castShadow />
+                <mesh geometry={GH.waist} material={top} position={[0, 0.09, 0]} scale={[1.1 * bw, 0.75, 0.76 * (0.85 + bw * 0.15)]} castShadow />
+              </>
+            )}
             {!lite && <Outfit style={style} main={main} bw={bw} />}
-            <mesh geometry={G.neck} material={skinM} position={[0, 0.45, 0]} scale={[0.9 + bw * 0.1, 1, 0.9 + bw * 0.1]} />
+            <mesh geometry={G.neck} material={skinM} position={[0, 0.46, 0]} scale={[0.85 + bw * 0.1, 1.3, 0.85 + bw * 0.1]} />
             {arm(-1, R.shL, R.elL, false)}
             {arm(1, R.shR, R.elR, true)}
-            <group ref={R.head} position={[0, 0.62, 0]}>
-              <mesh geometry={G.sphere} material={skinM} scale={[0.165, 0.185, 0.17]} castShadow={cast} />
-              {/* jaw */}
-              <mesh geometry={G.sphere} material={skinM} position={[0, -0.075, 0.03]} scale={[0.13, 0.11, 0.13]} />
+            <group ref={R.head} position={[0, 0.6, 0]} scale={lite ? 0.88 : 0.78}>
+              <mesh geometry={B.sphere} material={skinM} scale={[0.158, 0.188, 0.172]} castShadow={cast} />
+              {/* jaw and chin */}
+              <mesh geometry={B.sphere} material={skinM} position={[0, -0.082, 0.035]} scale={[0.122, 0.112, 0.125]} />
+              {!lite && <mesh geometry={B.sphere} material={skinM} position={[0, -0.16, 0.085]} scale={[0.045, 0.035, 0.04]} />}
               {!lite && (
                 <>
                   <mesh geometry={G.sphere} material={skinM} position={[-0.163, -0.01, 0]} scale={[0.03, 0.045, 0.03]} />

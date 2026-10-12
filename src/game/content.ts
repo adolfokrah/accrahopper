@@ -1061,6 +1061,7 @@ export const UPGRADES: UpgradeDef[] = [
   { id: 'ac', name: 'Air conditioner', emoji: '❄️', price: 1500, comfort: 6, blurb: '+6 comfort. Cool nights in the Accra heat.' },
   { id: 'generator', name: 'Solar & generator', emoji: '🔋', price: 2000, comfort: 2, blurb: 'Dumsor-proof: power cuts no longer ruin your night.' },
   { id: 'flat', name: 'Boys’ quarters flat', emoji: '🏘️', price: 9000, comfort: 0, blurb: 'Owned homes only. A self-contained flat on your compound, let to a tenant: GH₵90–140 a day.' },
+  { id: 'garage', name: 'Parking bay', emoji: '🅿️', price: 1200, comfort: 1, blurb: 'Apartments only. A secure bay for one car.' },
   { id: 'net', name: 'Mosquito nets', emoji: '🦟', price: 80, comfort: 1, blurb: 'Big cut to your malaria risk.' },
   { id: 'extend1', name: 'Room extension', emoji: '🧱', price: 2500, comfort: 2, blurb: 'Owned homes only. Knock through a wall: +2 columns and +1 row.' },
   { id: 'extend2', name: 'Second extension', emoji: '🏗️', price: 6000, comfort: 3, blurb: 'Owned homes only. Even more room. Needs the first extension.' },
@@ -1225,7 +1226,7 @@ export const STOCKS = [
 ]
 
 /* ------------------------------ transport ------------------------------ */
-export type RideMode = 'trotro' | 'taxi' | 'ride' | 'okada' | 'pragia'
+export type RideMode = 'trotro' | 'taxi' | 'ride' | 'okada' | 'pragia' | 'own'
 export const KM_PER_TILE = 0.12
 export const RIDES: Record<RideMode, { name: string; emoji: string; blurb: string; base: number; perKm: number; wait: number; minPerKm: number }> = {
   okada: { name: 'Okada', emoji: '🏍️', blurb: 'Motorbike taxi. Fast through traffic, a bit risky.', base: 5, perKm: 1.8, wait: 2, minPerKm: 1.1 },
@@ -1233,6 +1234,7 @@ export const RIDES: Record<RideMode, { name: string; emoji: string; blurb: strin
   trotro: { name: 'Trotro', emoji: '🚐', blurb: 'Cheapest. Shared minibus, may hit go-slow.', base: 4, perKm: 0.8, wait: 10, minPerKm: 3 },
   taxi: { name: 'Taxi (dropping)', emoji: '🚕', blurb: 'Private drop straight to the door.', base: 12, perKm: 4, wait: 4, minPerKm: 1.6 },
   ride: { name: 'Order a ride', emoji: '📱', blurb: 'App ride with AC. Surge pricing at night.', base: 10, perKm: 3.5, wait: 6, minPerKm: 1.4 },
+  own: { name: 'Drive your car', emoji: '🚗', blurb: 'Your own wheels. Pay only for fuel.', base: 2, perKm: 0.9, wait: 1, minPerKm: 1.1 },
 }
 
 /* ------------------------------------------------------------------ */
@@ -1848,7 +1850,7 @@ export const EVENTS: Record<string, GameEventDef> = {
 
 
 /* ------------------------------ driving jobs ------------------------------ */
-export type VehicleId = 'okada' | 'pragia' | 'car' | 'trotro'
+export type VehicleId = 'okada' | 'pragia' | 'car' | 'trotro' | 'compact' | 'suv' | 'pickup' | 'sports' | 'luxury'
 export interface VehicleDef {
   id: VehicleId
   name: string
@@ -1862,14 +1864,32 @@ export interface VehicleDef {
   payPerKm: number
   base: number
   blurb: string
+  /** Bought to drive yourself, not for work. */
+  personal?: boolean
+  /** Body shape and paint for the 3D model. */
+  body?: 'saloon' | 'suv' | 'pickup' | 'sports' | 'luxury' | 'compact'
+  color?: string
+  /** Comfort/status: shown in the dealer and raises respect when bought. */
+  status?: number
 }
 export const VEHICLES: Record<VehicleId, VehicleDef> = {
   okada: { id: 'okada', name: 'Motorbike', emoji: '🏍️', price: 6000, rent: 40, license: false, ride: 'okada', job: 'Okada rider', payPerKm: 2.5, base: 10, blurb: 'No licence needed. Police may stop you.' },
   pragia: { id: 'pragia', name: 'Pragia tricycle', emoji: '🛺', price: 9000, rent: 50, license: false, ride: 'pragia', job: 'Pragia rider', payPerKm: 3.0, base: 12, blurb: 'Carry three passengers. No licence needed.' },
   car: { id: 'car', name: 'Saloon car', emoji: '🚗', price: 45000, rent: 100, license: true, ride: 'ride', job: 'Ride-hailing driver', payPerKm: 4.5, base: 18, blurb: 'Drive for the ride app. Needs a licence.' },
   trotro: { id: 'trotro', name: 'Trotro bus', emoji: '🚐', price: 80000, rent: 160, license: true, ride: 'trotro', job: 'Trotro driver', payPerKm: 6.0, base: 30, blurb: 'Carry 12 passengers a trip. Needs a licence.' },
+  compact: { id: 'compact', name: 'Kia Picanto (used)', emoji: '🚙', price: 28000, rent: 0, license: true, ride: 'own', job: '', payPerKm: 0, base: 0, personal: true, body: 'compact', color: '#e0524a', status: 1, blurb: 'Small, cheap to run, easy to park.' },
+  suv: { id: 'suv', name: 'Toyota Land Cruiser Prado', emoji: '🚙', price: 160000, rent: 0, license: true, ride: 'own', job: '', payPerKm: 0, base: 0, personal: true, body: 'suv', color: '#1b1b1b', status: 4, blurb: 'The big man’s SUV. Everybody notices.' },
+  pickup: { id: 'pickup', name: 'Toyota Hilux pickup', emoji: '🛻', price: 95000, rent: 0, license: true, ride: 'own', job: '', payPerKm: 0, base: 0, personal: true, body: 'pickup', color: '#f0ede6', status: 2, blurb: 'Tough workhorse for business and bad roads.' },
+  sports: { id: 'sports', name: 'Sports coupé', emoji: '🏎️', price: 240000, rent: 0, license: true, ride: 'own', job: '', payPerKm: 0, base: 0, personal: true, body: 'sports', color: '#f5c518', status: 6, blurb: 'Low, loud and fast. Pure flex.' },
+  luxury: { id: 'luxury', name: 'Mercedes S-Class', emoji: '🚘', price: 380000, rent: 0, license: true, ride: 'own', job: '', payPerKm: 0, base: 0, personal: true, body: 'luxury', color: '#2c3442', status: 8, blurb: 'Chauffeur-grade luxury. You have arrived.' },
 }
+/** Cars you can drive yourself (personal cars and the ride-hailing saloon). */
+export const DRIVABLE: VehicleId[] = ['car', 'compact', 'suv', 'pickup', 'sports', 'luxury']
+/** Garage spaces per home tier (apartments need the parking bay upgrade). */
+export const GARAGE_SPACES: Record<HomeTier, number> = { room: 0, apartment: 0, premium: 2, house: 3 }
 export const VEHICLE_IDS = Object.keys(VEHICLES) as VehicleId[]
+/** Work vehicles (Drive app shifts). */
+export const WORK_VEHICLES = VEHICLE_IDS.filter((v) => !VEHICLES[v].personal)
 export const DRIVING = { tripsPerShift: 6, licenseTest: 200, licensePass: 0.65, licenseBribe: 600, licenseBribeChance: 0.85, checkpointChance: 0.18, okadaCheckpointBonus: 0.15, bribe: 30, okadaRideRisk: 0.05 }
 
 /* ------------------------------ activities for new kinds ------------------------------ */

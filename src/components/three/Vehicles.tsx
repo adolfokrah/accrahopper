@@ -2,9 +2,9 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { DEFAULT_APPEARANCE } from '@/game/content'
+import { DEFAULT_APPEARANCE, DEST_BY_ID, DRIVABLE, VEHICLES, homeDestId } from '@/game/content'
 import { runtime } from '@/game/runtime'
-import { useGame } from '@/game/store'
+import { myCar, useGame } from '@/game/store'
 import { useUI } from '@/game/ui'
 import type { Appearance } from '@/game/types'
 import { CarModel, MotoModel } from './Ambient'
@@ -12,7 +12,7 @@ import { Character, type Motion } from './Character'
 import { TextPlane } from './Label'
 import { Part, headlightMat, labelScale, viewCenter, windowMat } from './shared'
 
-type Mode = 'trotro' | 'taxi' | 'ride' | 'okada' | 'pragia'
+type Mode = 'trotro' | 'taxi' | 'ride' | 'okada' | 'pragia' | 'own'
 const DRIVER: Appearance = { skin: 4, hair: 0, hairColor: 0, outfit: 0, outfitColor: 3, accessory: 2 }
 const PAX: Appearance[] = [
   { skin: 2, hair: 2, hairColor: 1, outfit: 2, outfitColor: 0, accessory: 0 },
@@ -48,6 +48,78 @@ export function PragiaModel({ color = '#fcd116' }: { color?: string }) {
       ))}
       <Part p={[0, 1.92, -0.05]} s={[1.3, 0.06, 2.0]} c="#2e86de" />
       <Part p={[0, 1.94, -0.05]} s={[1.32, 0.03, 0.5]} c="#ce1126" />
+    </>
+  )
+}
+
+/* ------------------------------- personal cars ------------------------------- */
+type Body = 'saloon' | 'suv' | 'pickup' | 'sports' | 'luxury' | 'compact'
+/** A privately owned car: body shape and paint per model (local +z is the front). */
+export function PersonalCar({ body, color }: { body: Body; color: string }) {
+  const glass = '#9fd3f0'
+  const dims: Record<Body, { w: number; l: number; h: number; cab: number; cabL: number; cabZ: number; wheel: number; clear: number }> = {
+    compact: { w: 0.72, l: 1.45, h: 0.36, cab: 0.32, cabL: 0.85, cabZ: -0.05, wheel: 0.15, clear: 0.14 },
+    saloon: { w: 0.78, l: 1.75, h: 0.36, cab: 0.3, cabL: 0.95, cabZ: -0.1, wheel: 0.16, clear: 0.15 },
+    luxury: { w: 0.82, l: 1.95, h: 0.38, cab: 0.3, cabL: 1.05, cabZ: -0.12, wheel: 0.17, clear: 0.15 },
+    suv: { w: 0.86, l: 1.85, h: 0.5, cab: 0.42, cabL: 1.15, cabZ: -0.2, wheel: 0.2, clear: 0.24 },
+    pickup: { w: 0.84, l: 1.95, h: 0.46, cab: 0.4, cabL: 0.7, cabZ: 0.2, wheel: 0.2, clear: 0.24 },
+    sports: { w: 0.82, l: 1.8, h: 0.26, cab: 0.22, cabL: 0.7, cabZ: -0.15, wheel: 0.16, clear: 0.1 },
+  }
+  const d = dims[body]
+  const y0 = d.clear + d.h / 2
+  const wz = d.l * 0.32
+  return (
+    <>
+      {/* body, darker sill and bumpers */}
+      <Part p={[0, y0, 0]} s={[d.w, d.h, d.l]} c={color} rough={0.35} />
+      <Part p={[0, d.clear + 0.03, 0]} s={[d.w + 0.02, 0.06, d.l * 0.92]} c="#1b1b1b" />
+      <Part p={[0, d.clear + 0.06, d.l / 2]} s={[d.w * 0.96, 0.1, 0.06]} c={body === 'luxury' ? '#c0c4ca' : '#2a2a2a'} rough={0.3} />
+      <Part p={[0, d.clear + 0.06, -d.l / 2]} s={[d.w * 0.96, 0.1, 0.06]} c="#2a2a2a" />
+      {/* cabin with tinted glass */}
+      <Part p={[0, y0 + d.h / 2 + d.cab / 2, d.cabZ]} s={[d.w * 0.86, d.cab, d.cabL]} c={color} rough={0.35} />
+      <Part p={[0, y0 + d.h / 2 + d.cab / 2, d.cabZ]} s={[d.w * 0.88, d.cab * 0.72, d.cabL * 0.9]} c={body === 'suv' || body === 'luxury' ? '#2b3440' : glass} rough={0.15} />
+      {body === 'pickup' && (
+        <>
+          <Part p={[d.w / 2 - 0.03, y0 + d.h / 2 + 0.07, -0.45]} s={[0.05, 0.14, 0.9]} c={color} />
+          <Part p={[-d.w / 2 + 0.03, y0 + d.h / 2 + 0.07, -0.45]} s={[0.05, 0.14, 0.9]} c={color} />
+          <Part p={[0, y0 + d.h / 2 + 0.07, -d.l / 2 + 0.03]} s={[d.w, 0.14, 0.05]} c={color} />
+        </>
+      )}
+      {body === 'suv' && <Part p={[0, y0 + d.h / 2 + d.cab + 0.03, d.cabZ]} s={[d.w * 0.7, 0.04, d.cabL * 0.8]} c="#9aa4ae" />}
+      {body === 'sports' && <Part p={[0, y0 + d.h / 2 + 0.08, -d.l / 2 + 0.08]} s={[d.w * 0.9, 0.04, 0.16]} c="#1b1b1b" />}
+      {body === 'luxury' && <Part p={[0, y0 + 0.05, d.l / 2 + 0.01]} s={[0.24, 0.12, 0.02]} c="#c0c4ca" rough={0.2} />}
+      {/* wheels with rims */}
+      {[[1, wz], [-1, wz], [1, -wz], [-1, -wz]].map(([sx, z], i) => (
+        <group key={i} position={[sx * (d.w / 2), d.wheel, z]}>
+          <Part g="cyl" s={[d.wheel, 0.12, d.wheel]} r={[0, 0, Math.PI / 2]} c="#151515" />
+          <Part g="cyl" p={[sx * 0.065, 0, 0]} s={[d.wheel * 0.55, 0.01, d.wheel * 0.55]} r={[0, 0, Math.PI / 2]} c={body === 'sports' || body === 'luxury' ? '#d4d8de' : '#8a9099'} rough={0.25} />
+        </group>
+      ))}
+      {/* lights */}
+      <Part p={[d.w * 0.32, y0 + 0.04, d.l / 2 + 0.01]} s={[0.16, 0.07, 0.03]} m={headlightMat} cast={false} />
+      <Part p={[-d.w * 0.32, y0 + 0.04, d.l / 2 + 0.01]} s={[0.16, 0.07, 0.03]} m={headlightMat} cast={false} />
+      <Part p={[d.w * 0.34, y0 + 0.04, -d.l / 2 - 0.01]} s={[0.14, 0.06, 0.03]} c="#c0392b" cast={false} />
+      <Part p={[-d.w * 0.34, y0 + 0.04, -d.l / 2 - 0.01]} s={[0.14, 0.06, 0.03]} c="#c0392b" cast={false} />
+    </>
+  )
+}
+
+/** Cars you own, parked on the pavement beside your home's door. Hidden while you are out driving one. */
+export function ParkedCars() {
+  const vehicles = useGame((s) => s.vehicles)
+  const homeId = useGame((s) => (s.housing.homeless ? null : homeDestId(s)))
+  const driving = useGame((s) => s.activity?.ctx.ride === 'own')
+  if (!homeId) return null
+  const cars = vehicles.filter((v) => DRIVABLE.includes(v)).sort((a, b) => (VEHICLES[b].status ?? 0) - (VEHICLES[a].status ?? 0))
+  const door = DEST_BY_ID[homeId]?.door
+  if (!door || !cars.length) return null
+  return (
+    <>
+      {cars.slice(driving ? 1 : 0, 3).map((v, i) => (
+        <group key={v} position={[door.x + 0.5 + (i % 2 ? -2.2 : 2.2) * (1 + Math.floor(i / 2)), 0.12, door.z + 0.5]} rotation={[0, Math.PI / 2, 0]}>
+          <PersonalCar body={VEHICLES[v].body ?? 'saloon'} color={VEHICLES[v].color ?? '#1f2d45'} />
+        </group>
+      ))}
     </>
   )
 }
@@ -192,12 +264,16 @@ export function RideVehicle() {
   if (!ride) return null
   const me = profile?.appearance ?? DEFAULT_APPEARANCE
   const carLike = ride === 'taxi' || ride === 'ride' || ride === 'trotro'
+  const own = ride === 'own' ? myCar(useGame.getState()) : null
+  const ownDef = own ? VEHICLES[own] : null
   return (
     <group ref={g}>
       {carLike && view === 'chase' && (
         <group scale={1.7}>{ride === 'trotro' ? <CarModel danfo color="#f0ede6" /> : <CarModel danfo={false} color={CAR_COLOR[ride]} />}</group>
       )}
       {(ride === 'taxi' || ride === 'ride') && view === 'inside' && <CarCockpit color={CAR_COLOR[ride]} driver={driver} taxi={ride === 'taxi'} />}
+      {ride === 'own' && view === 'chase' && <group scale={1.7}><PersonalCar body={ownDef?.body ?? 'saloon'} color={ownDef?.color ?? '#1f2d45'} /></group>}
+      {ride === 'own' && view === 'inside' && <CarCockpit color={ownDef?.color ?? '#1f2d45'} driver taxi={false} />}
       {ride === 'trotro' && view === 'inside' && <TrotroCockpit driver={driver} />}
       {ride === 'okada' && <OkadaRig driver={driver} me={me} />}
       {ride === 'pragia' && <PragiaRig driver={driver} me={me} />}
@@ -279,6 +355,7 @@ export function RideCam() {
         trotro: drv ? [0.42, 1.34, 1.0] : [-0.42, 1.34, 1.0],
         okada: drv ? [0, 1.42, -0.12] : [0.26, 1.66, -0.62],
         pragia: drv ? [0, 1.25, 0.18] : [-0.28, 1.25, -0.5],
+        own: [0.32, 1.22, 0.05],
       }
       const [sx, sy, sz] = seats[ride]
       eye.set(sx, sy + bob, sz)

@@ -6,7 +6,7 @@ import { BALANCE, GAME_CONFIG, dayOf, formatClock, formatMoney, hourOf } from '@
 import { AREAS, AREA_BY_ID, CAREERS, CAREER_IDS, DESTINATIONS, DEST_BY_ID, HOMES, NPCS, SKILLS } from '@/game/content'
 import { walkToDest } from '@/game/nav'
 import { QUICK_MESSAGES, canRentOut, cleanCash, launderCap, loanLimit, missingRequirements, rentOutRange, useGame } from '@/game/store'
-import { LAUNDER, BIZ, HOME_SELL_BACK, SELL_BACK, PROJECTS, projectStages, BUSINESSES, BUSINESS_BY_ID, DRIVING, FINANCE, LOAN, PLOTS, STOCKS, VEHICLES, VEHICLE_IDS, homeDestId } from '@/game/content'
+import { LAUNDER, BIZ, HOME_SELL_BACK, SELL_BACK, PROJECTS, projectStages, BUSINESSES, BUSINESS_BY_ID, DRIVING, FINANCE, LOAN, PLOTS, STOCKS, VEHICLES, WORK_VEHICLES, homeDestId } from '@/game/content'
 import { plotValue } from '@/game/property'
 import { GOALS, TASK_BY_ID, taskProgress } from '@/game/life'
 import { LifeGoalsList } from './LifeUI'
@@ -894,7 +894,7 @@ function DriveApp() {
         <Row icon="🪪" iconBg={s.license ? '#34c759' : '#ff9500'} title={s.license ? 'Driving licence' : 'No licence yet'} sub={s.license ? 'Valid for cars and trotros' : 'Take the test at the DVLA office in Ridge'} chevron={!s.license} onClick={s.license ? undefined : () => directions('dvla')} />
       </Group>
       <Group header="Jobs" footer="Not your vehicle? Pay the owner a daily “work and pay” rental when you start. Buy your own at Spintex Motors.">
-        {VEHICLE_IDS.map((v) => {
+        {WORK_VEHICLES.map((v) => {
           const d = VEHICLES[v]
           const owned = s.vehicles.includes(v)
           const rented = s.rentedDay[v] === today

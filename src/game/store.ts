@@ -30,6 +30,8 @@ import {
   PLOTS,
   PLOT_BY_ID,
   VEHICLES,
+  DRIVABLE,
+  GARAGE_SPACES,
   DRIVING,
   homeDestId,
   type VehicleId,
@@ -423,6 +425,19 @@ export function launderCap(s: Pick<GameState, 'businesses' | 'laundered' | 'minu
   if (!b || !own) return 0
   const used = s.laundered[bizId]?.day === dayOf(s.minutes) ? s.laundered[bizId].amount : 0
   return Math.max(0, Math.round(b.income[1] * own.level * LAUNDER.business.capDays) - used)
+}
+/** Parking spaces at your current home. */
+export function garageSpaces(s: Pick<GameState, 'housing' | 'upgrades'>): number {
+  if (s.housing.homeless) return 0
+  const t = s.housing.tier
+  return GARAGE_SPACES[t] + (t === 'apartment' && (s.upgrades[t] ?? []).includes('garage') ? 1 : 0)
+}
+/** Cars and buses you own that need a parking space (motorbikes and tricycles do not). */
+export const parkedVehicles = (s: Pick<GameState, 'vehicles'>) => s.vehicles.filter((v) => VEHICLES[v].license)
+/** The best car you own to drive yourself, if any. */
+export function myCar(s: Pick<GameState, 'vehicles'>): VehicleId | null {
+  const cars = s.vehicles.filter((v) => DRIVABLE.includes(v))
+  return cars.sort((a, b) => (VEHICLES[b].status ?? 0) - (VEHICLES[a].status ?? 0))[0] ?? null
 }
 /** Change reputation: street cred and respect, each 0–100. */
 function addRep(d: GameState, street: number, respect: number) {
@@ -2378,8 +2393,14 @@ export const useGame = create<GameState>((set, get) => ({
       d.player = { x: here.door.x + 0.5, z: here.door.z + 0.5, rot: 0 }
       teleport(d.player.x, d.player.z)
     }
+    const own = mode === 'own' ? myCar(d) : null
+    if (mode === 'own') {
+      if (!own) return toast('You do not own a car. Buy one at Spintex Motors.', 'warn')
+      if (!d.license) return toast('You need a driving licence from the DVLA to drive', 'warn')
+      if (d.needs.energy < 10) return toast('Too tired to drive safely', 'warn')
+    }
     const q = rideQuote(d, mode, destId)
-    if (d.money < q.fare) return toast(`Need ${formatMoney(q.fare - d.money)} more for the ${RIDES[mode].name.toLowerCase()}`, 'warn')
+    if (d.money < q.fare) return toast(`Need ${formatMoney(q.fare - d.money)} more for the ${mode === 'own' ? 'fuel' : RIDES[mode].name.toLowerCase()}`, 'warn')
     let extra = 0
     let note = ''
     if (mode === 'trotro' && Math.random() < 0.3) {
@@ -2387,15 +2408,16 @@ export const useGame = create<GameState>((set, get) => ({
       note = `🚧 Go-slow at Circle added ${extra} min.`
     } else if (mode === 'taxi') note = '🚕 The driver argued about football the whole way.'
     else if (mode === 'ride') note = `❄️ Cool AC ride${q.surge ? ' (night surge pricing)' : ''}.`
+    else if (mode === 'own') note = `${VEHICLES[own!].emoji} You drove your ${VEHICLES[own!].name}. Fuel ${formatMoney(q.fare)}.`
     else note = '🚐 “Circle! Circle!” The mate packed everyone in.'
-    spend(d, q.fare, `${RIDES[mode].name} to ${to.name}`, 'transport')
+    spend(d, q.fare, mode === 'own' ? `Fuel to ${to.name}` : `${RIDES[mode].name} to ${to.name}`, 'transport')
     d.activity = {
-      uid: d.nextId++, defId: `ride:${mode}`, label: `${RIDES[mode].name} to ${to.name}`, icon: RIDES[mode].emoji, kind: 'travel', ctx: { ride: mode },
+      uid: d.nextId++, defId: `ride:${mode}`, label: mode === 'own' ? `Driving to ${to.name}` : `${RIDES[mode].name} to ${to.name}`, icon: mode === 'own' ? VEHICLES[own!].emoji : RIDES[mode].emoji, kind: 'travel', ctx: { ride: mode, ...(mode === 'own' ? { drive: true } : {}) },
       total: q.minutes + extra, done: 0, scale: BALANCE.travelMinutesPerSecond, needs: mode === 'ride' ? { fun: 4 } : mode === 'trotro' ? { social: 4, hygiene: -3 } : { social: 2 },
       appliedFrac: 0, reward: 0, skillXp: {}, careerXp: 0, cost: q.fare, travelTo: destId, startedAt: d.minutes, meta: { note },
     }
     const path = roadRoute(d.player.x, d.player.z, to.door.x, to.door.z)
-    runtime.ride = { mode, path }
+    runtime.ride = { mode, path, ...(mode === 'own' ? { driver: true } : {}) }
     // ride in real time so you can watch the city go by
     let len = 0
     for (let i = 1; i < path.length; i++) len += Math.hypot(path[i].x - path[i - 1].x, path[i].z - path[i - 1].z)
@@ -2746,12 +2768,21 @@ export const useGame = create<GameState>((set, get) => ({
     if (s.vehicles.includes(v)) return
     if (s.nearDest !== 'dealer') return toast('Visit Spintex Motors to buy vehicles', 'warn')
     if (s.money < def.price) return toast(`Need ${formatMoney(def.price - s.money)} more`, 'warn')
+    if (def.license && parkedVehicles(s).length >= garageSpaces(s)) {
+      const spaces = garageSpaces(s)
+      return toast(spaces === 0
+        ? (s.housing.tier === 'apartment' ? '🅿️ You need somewhere to park it. Add a parking bay to your apartment (Home → upgrades).' : '🅿️ You need a garage. A compound room has no parking: move to an apartment with a parking bay, a premium home or your own house.')
+        : `🅿️ Your garage is full (${spaces} space${spaces === 1 ? '' : 's'}). Sell a vehicle first.`, 'warn')
+    }
     const d = draft(s)
     const dirtyMsg = needClean(d, def.price)
     if (dirtyMsg) return toast(dirtyMsg, 'warn')
     spend(d, def.price, `Bought: ${def.name}`, 'purchase', true)
     d.vehicles = [...d.vehicles, v]
-    showResult(d, `You own a ${def.name.toLowerCase()}!`, def.emoji, [`Start a ${def.job.toLowerCase()} shift from the Drive app on your phone.`, 'No more daily rental fees.'], 'good')
+    if (def.status) addRep(d, 0, def.status)
+    showResult(d, `You own a ${def.name}!`, def.emoji, def.personal
+      ? ['🅿️ It is parked at your home.', `🚗 Pick “Drive your car” when you travel. You pay only for fuel.${s.license ? '' : ' Get your licence at the DVLA first.'}`, `🤝 Respect +${def.status}`]
+      : [`Start a ${def.job.toLowerCase()} shift from the Drive app on your phone.`, 'No more daily rental fees.'], 'good')
     set(d)
   },
 
@@ -2940,6 +2971,7 @@ export const useGame = create<GameState>((set, get) => ({
     const have = s.upgrades[s.housing.tier] ?? []
     if (have.includes(id)) return
     if (id === 'flat' && !canExtend(s)) return toast('Only homes you own can have a boys’ quarters flat', 'warn')
+    if (id === 'garage' && s.housing.tier !== 'apartment') return toast(s.housing.tier === 'room' ? 'A compound house has no parking. Move to an apartment or better.' : 'This home already has a garage', 'warn')
     const ei = EXTENSIONS.indexOf(id as (typeof EXTENSIONS)[number])
     if (ei >= 0) {
       if (!canExtend(s)) return toast('Only homes you own can be extended. Buy or build a house.', 'warn')

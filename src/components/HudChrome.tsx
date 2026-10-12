@@ -103,26 +103,38 @@ export function TopPill() {
 }
 
 /* ----------------------------- left stack ----------------------------- */
-/** Goal chip, needs pill and the "Clean screen" toggle under the top bar. */
-export function LeftStack({ journal }: { journal: ReactNode }) {
+/** The current goal, docked just above the tab bar where it catches the eye. Tap for details. */
+export function GoalDock({ journal }: { journal: ReactNode }) {
   const gs = useGame()
   const o = getObjective(gs)
   const clean = useUI((s) => s.clean)
-  const needsOpen = useUI((s) => s.needsOpen)
-  const [goalOpen, setGoalOpen] = useState(false)
+  const [open, setOpen] = useState(false)
+  if (clean) return null
   const icon = o.kind === 'urgent' ? '⚠️' : o.kind === 'tutorial' ? '🎓' : '🎯'
+  return (
+    <div className="hb-goal-dock">
+      {open && <div className="hb-journal">{journal}</div>}
+      <button className={`hb-card hb-goal ${o.kind}`} onClick={() => { sfx('click'); setOpen(!open) }} aria-expanded={open}>
+        <span className="hb-goal-ico" aria-hidden>{icon}</span>
+        <span className="hb-goal-text">
+          <b>{o.title}</b>
+          <small>{o.detail}</small>
+        </span>
+        <span className="hb-goal-chev" aria-hidden>{open ? '⌄' : '⌃'}</span>
+      </button>
+    </div>
+  )
+}
+
+/** Needs pill and the "Clean screen" toggle under the top bar. */
+export function LeftStack() {
+  const gs = useGame()
+  const clean = useUI((s) => s.clean)
+  const needsOpen = useUI((s) => s.needsOpen)
   return (
     <div className="hb-left">
       {!clean && (
         <>
-          <button className={`hb-card hb-goal ${o.kind}`} onClick={() => { sfx('click'); setGoalOpen(!goalOpen) }} aria-expanded={goalOpen}>
-            <span className="hb-goal-ico" aria-hidden>{icon}</span>
-            <span className="hb-goal-text">
-              <b>{o.title}</b>
-              <small>{o.detail}</small>
-            </span>
-          </button>
-          {goalOpen && <div className="hb-journal">{journal}</div>}
           <button className="hb-card hb-needs" onClick={() => { sfx('click'); useUI.setState({ needsOpen: !needsOpen }) }} aria-expanded={needsOpen} aria-label="Needs">
             {NEED_IDS.map((k) => {
               const v = gs.needs[k]

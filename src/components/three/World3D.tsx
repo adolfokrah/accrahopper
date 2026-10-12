@@ -425,7 +425,7 @@ function Npcs() {
   )
 }
 
-import { RideCam, RideVehicle, rideView } from './Vehicles'
+import { ParkedCars, RideCam, RideVehicle, rideView } from './Vehicles'
 
 function ClickMarker() {
   const ref = useRef<THREE.Mesh>(null)
@@ -528,6 +528,7 @@ function WorldContent() {
         <TrafficLights />
         <Player />
         <RideVehicle />
+        <ParkedCars />
         <RideCam />
         <ClickMarker />
         <GroundPicker />

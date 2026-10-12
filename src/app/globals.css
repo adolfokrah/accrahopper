@@ -4869,3 +4869,35 @@ button.ios-row:active {
 @media (max-width: 760px) {
   .hud2 .panel-slot.open > .sheet { border-radius: 26px; }
 }
+
+/* goal docked above the tab bar */
+.hb-goal-dock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+  pointer-events: auto;
+}
+.hud2 .bottom-stack .hb-goal {
+  width: 100%;
+  max-width: none;
+  border-radius: 22px;
+  padding: 8px 14px 8px 8px;
+  box-shadow: 0 8px 24px rgba(20, 30, 50, 0.22);
+}
+.hb-goal.urgent { box-shadow: 0 0 0 2px #e0524a, 0 8px 24px rgba(224, 82, 74, 0.3) !important; animation: goal-pulse 2.4s ease-in-out infinite; }
+@keyframes goal-pulse { 50% { transform: translateY(-2px); } }
+.hb-goal-chev { margin-left: auto; color: #8b95a7; font-weight: 800; }
+.hb-goal-dock .hb-journal { max-height: 40vh; overflow-y: auto; border-radius: 18px; }
+@media (prefers-reduced-motion: reduce) { .hb-goal.urgent { animation: none; } }
+/* right-hand controls sit mid-screen, clear of the bottom stack */
+.hud2 .view-controls { top: 38% !important; bottom: auto !important; }
+.rob-fab { top: calc(38% + 104px) !important; bottom: auto !important; }
+@media (min-width: 761px) {
+  .hud2 .view-controls { top: 30% !important; }
+  .rob-fab { top: calc(30% + 330px) !important; }
+}
+.garage-info { display: flex; flex-direction: column; gap: 2px; background: #eef7f1; border-radius: 14px; padding: 10px 12px; }
+.garage-info.none { background: #fdf3e7; }
+.garage-info small { color: #5b6577; }
+.dealer-car.personal { border-color: #e9d9a8; }

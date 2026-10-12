@@ -19,7 +19,7 @@ import { RobPrompt } from './RobPrompt'
 import { PhonePanel } from './Phone'
 import { SettingsPanel } from './SettingsPanel'
 import { CourtModal, StatusChips, TaskList, TravelSheet } from './LifeUI'
-import { LeftStack, NavBar, TopPill } from './HudChrome'
+import { GoalDock, LeftStack, NavBar, TopPill } from './HudChrome'
 
 /* ---------------------------- journal ---------------------------- */
 /** One tidy card: current goal, today's tasks and status, with tabs. Collapsible. */
@@ -510,7 +510,7 @@ export function HUD() {
     <div className="hud hud2">
       <div className="hb-head">
         <TopPill />
-        <LeftStack journal={<Journal />} />
+        <LeftStack />
       </div>
       <ViewControls />
       {/* stacked right above the bottom navigation: alerts, activity, the door you are at, then your goal */}
@@ -519,6 +519,7 @@ export function HUD() {
         <ResultCard />
         <ActivityBar />
         <EnterPrompt />
+        <GoalDock journal={<Journal />} />
       </div>
       <NavBar />
       {panel === 'phone' && <PhonePanel />}

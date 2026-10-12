@@ -182,7 +182,7 @@ export interface ActivityContext {
   travelTo?: string
   career?: CareerId
   npc?: string
-  ride?: 'trotro' | 'taxi' | 'ride' | 'okada' | 'pragia'
+  ride?: 'trotro' | 'taxi' | 'ride' | 'okada' | 'pragia' | 'own'
   /** Driving-job trip (you are the driver). */
   drive?: boolean
   /** Street crime against a passer-by. */

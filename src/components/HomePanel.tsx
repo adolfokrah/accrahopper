@@ -98,7 +98,7 @@ function HomeUpgrades() {
   return (
     <div className="card-inner">
       <b>🔧 Upgrade your {HOMES[tier].name.toLowerCase()}</b>
-      {UPGRADES.filter((u) => !(EXTENSIONS as readonly string[]).includes(u.id)).map((u) => (
+      {UPGRADES.filter((u) => !(EXTENSIONS as readonly string[]).includes(u.id) && (u.id !== 'garage' || tier === 'apartment')).map((u) => (
         <div key={u.id} className="row between upg">
           <span>{u.emoji} {u.name}<small className="muted block">{u.blurb}</small></span>
           {have.includes(u.id) ? <Chip tone="plus">{u.id === 'flat' ? 'Tenant paying' : 'Installed'}</Chip> : u.id === 'flat' && !own ? <Chip tone="warn">Own it first</Chip> : <Btn small disabled={s.money < u.price} onClick={() => { useGame.getState().buyUpgrade(u.id); sfx('coin') }}>{formatMoney(u.price)}</Btn>}

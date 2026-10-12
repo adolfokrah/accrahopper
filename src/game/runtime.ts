@@ -33,7 +33,7 @@ export const runtime = {
   /** Pixels the world is shifted up so mobile bottom sheets do not cover the character. */
   uiShift: 0,
   /** Active vehicle ride: the route the car follows while the travel activity runs. */
-  ride: null as null | { mode: 'trotro' | 'taxi' | 'ride' | 'okada' | 'pragia'; path: { x: number; z: number }[]; driver?: boolean; holding?: boolean },
+  ride: null as null | { mode: 'trotro' | 'taxi' | 'ride' | 'okada' | 'pragia' | 'own'; path: { x: number; z: number }[]; driver?: boolean; holding?: boolean },
   /** Ride camera: inside the vehicle or chasing it. */
   rideCam: 'inside' as 'inside' | 'chase',
   /** Real-time clock for traffic signals (seconds). */

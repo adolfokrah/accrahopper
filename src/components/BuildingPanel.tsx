@@ -22,6 +22,7 @@ import {
   PLOTS,
   VEHICLES,
   VEHICLE_IDS,
+  WORK_VEHICLES,
   BUILD_STAGES,
   PROJECTS,
   PROJECT_IDS,
@@ -47,8 +48,9 @@ import {
 } from '@/game/content'
 import { canEnter, walkToDest } from '@/game/nav'
 import { resolve } from '@/game/activities'
-import { canRentOut, missingRequirements, rentOutRange, useGame, type GameState } from '@/game/store'
+import { canRentOut, missingRequirements, rentOutRange, useGame, type GameState, garageSpaces, parkedVehicles } from '@/game/store'
 import { useUI } from '@/game/ui'
+import type { VehicleId } from '@/game/content'
 import { Catalogue } from './Catalogue'
 import { Btn, Chip, Meter, Sheet } from './kit'
 
@@ -302,7 +304,7 @@ export function UpgradesCard() {
   return (
     <div className="card-inner">
       <b>🔧 Upgrade your {HOMES[s.housing.tier].name.toLowerCase()}</b>
-      {UPGRADES.map((u) => (
+      {UPGRADES.filter((u) => u.id !== 'garage' || s.housing.tier === 'apartment').map((u) => (
         <div key={u.id} className="row between upg">
           <span>{u.emoji} {u.name}<small className="muted block">{u.blurb}</small></span>
           {have.includes(u.id) ? <Chip tone="plus">Installed</Chip> : <Btn small disabled={s.money < u.price} onClick={() => { useGame.getState().buyUpgrade(u.id); sfx('coin') }}>{formatMoney(u.price)}</Btn>}
@@ -453,21 +455,34 @@ function LandForSale({ near }: { near: boolean }) {
 function DealerCard() {
   const s = useGame()
   const near = s.nearDest === 'dealer'
+  const spaces = garageSpaces(s)
+  const used = parkedVehicles(s).length
+  const row = (v: VehicleId) => {
+    const d = VEHICLES[v]
+    const owned = s.vehicles.includes(v)
+    const needsSpace = d.license && !owned && used >= spaces
+    return (
+      <div key={v} className={`card-inner dealer-car ${d.personal ? 'personal' : ''}`}>
+        <div className="row between"><b>{d.emoji} {d.name}</b>{owned ? <Chip tone="plus">Owned</Chip> : <Chip tone="gold">{formatMoney(d.price)}</Chip>}</div>
+        <small className="muted">{d.personal ? `${d.blurb}${d.status ? ` Respect +${d.status}.` : ''}` : `${d.job}. ${d.blurb} Or rent daily for ${formatMoney(d.rent)} (“work and pay”).`}</small>
+        {!owned && <Btn small disabled={!near || s.money < d.price || needsSpace} onClick={() => { useGame.getState().buyVehicle(v); sfx('success') }}>{needsSpace ? '🅿️ No garage space' : `Buy ${formatMoney(d.price)}`}</Btn>}
+        {owned && <Btn small kind="soft" disabled={s.drive?.vehicle === v || s.activity?.ctx.ride === 'own'} onClick={() => { useGame.getState().sellVehicle(v); sfx('coin') }}>Sell for {formatMoney(Math.round(d.price * SELL_BACK.vehicle))}</Btn>}
+      </div>
+    )
+  }
   return (
     <>
-      {VEHICLE_IDS.map((v) => {
-        const d = VEHICLES[v]
-        const owned = s.vehicles.includes(v)
-        return (
-          <div key={v} className="card-inner">
-            <div className="row between"><b>{d.emoji} {d.name}</b>{owned ? <Chip tone="plus">Owned</Chip> : <Chip tone="gold">{formatMoney(d.price)}</Chip>}</div>
-            <small className="muted">{d.job}. {d.blurb} Or rent daily for {formatMoney(d.rent)} (“work and pay”).</small>
-            {!owned && <Btn small disabled={!near || s.money < d.price} onClick={() => { useGame.getState().buyVehicle(v); sfx('success') }}>Buy {formatMoney(d.price)}</Btn>}
-            {owned && <Btn small kind="soft" disabled={s.drive?.vehicle === v} onClick={() => { useGame.getState().sellVehicle(v); sfx('coin') }}>Sell for {formatMoney(Math.round(d.price * SELL_BACK.vehicle))}</Btn>}
-          </div>
-        )
-      })}
-      <small className="muted">Start shifts from the Drive app on your phone. Licences come from the DVLA.</small>
+      <div className={`garage-info ${spaces === 0 ? 'none' : ''}`}>
+        <b>🅿️ Your garage: {used}/{spaces} space{spaces === 1 ? '' : 's'} used</b>
+        <small>{spaces === 0
+          ? s.housing.tier === 'apartment' ? 'Add a parking bay to your apartment (Home → upgrades) to own a car.' : 'A compound room has no parking. Move to an apartment with a parking bay, a premium home or your own house to own a car.'
+          : 'Cars and buses need a space. Motorbikes and tricycles park anywhere.'}</small>
+      </div>
+      <b>🚘 Cars for you</b>
+      {VEHICLE_IDS.filter((v) => VEHICLES[v].personal).map(row)}
+      <b>💼 Work vehicles</b>
+      {WORK_VEHICLES.map(row)}
+      <small className="muted">Drive yourself with “Drive your car” when you travel. Start work shifts from the Drive app. Licences come from the DVLA.</small>
     </>
   )
 }

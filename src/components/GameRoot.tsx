@@ -142,7 +142,8 @@ export default function GameRoot() {
         if (onRoad && !wasOnRoad) {
           const cw = crosswalkAt(tx, tz)
           const j = cw ? cw.j : nearestJunction(tx, tz, 8)
-          if (j >= 0) {
+          // only signalised junctions have a light to break
+          if (j >= 0 && junctions[j]?.signal) {
             // on a zebra crossing the relevant traffic is the one being crossed
             const axis = cw ? cw.axis : vStreetAt(tx) >= 0 ? 'ns' : 'ew'
             if (lightFor(j, axis, runtime.lightT) === 'green') {
