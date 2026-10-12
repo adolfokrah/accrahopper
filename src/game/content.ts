@@ -1181,6 +1181,7 @@ export const DEST_ACTIVITIES: Record<string, ActivityDef[]> = {
   lounge: [
     A({ id: 'hangout', label: 'Dance to Afrobeats', blurb: 'Hit the dance floor.', icon: '💃', kind: 'social', minutes: 90, cost: 40, needs: { fun: 25, social: 20, bladder: -6 } }),
     A({ id: 'mocktail', label: 'Drinks at the bar', blurb: 'Sobolo mocktail and a catch-up.', icon: '🍹', kind: 'social', minutes: 60, cost: 25, needs: { fun: 14, social: 10, bladder: -8 } }),
+    A({ id: 'popbottle', label: 'Pop a bottle (VIP table)', blurb: 'Champagne, sparklers and the whole club watching you.', icon: '🍾', kind: 'social', minutes: 45, cost: 250, needs: { fun: 35, social: 30, bladder: -6 }, hours: [18, 6] }),
     A({ id: 'spray', label: 'Spray money on the dance floor', blurb: 'Make it rain cedis. The crowd loves you, and people notice.', icon: '💸', kind: 'social', minutes: 30, cost: 100, needs: { fun: 30, social: 25 }, effect: 'spray', hours: [18, 6] }),
     A({ id: 'hookup_m', label: 'Chat up a guy', blurb: '18+. Find a man on the dance floor and see where the night goes.', icon: '😏', kind: 'social', minutes: 45, needs: { social: 10, fun: 6 }, effect: 'hookup_m', require: 'mature', hours: [20, 6], dailyLimit: 2 }),
     A({ id: 'hookup', label: 'Chat up a girl', blurb: '18+. Find a woman on the dance floor and see where the night goes.', icon: '😏', kind: 'social', minutes: 45, needs: { social: 10, fun: 6 }, effect: 'hookup', require: 'mature', hours: [20, 6], dailyLimit: 2 }),

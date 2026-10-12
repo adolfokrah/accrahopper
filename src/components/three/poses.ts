@@ -49,7 +49,7 @@ export const ACT_LOOK: Record<string, ActLook> = {
   show: { pose: 'cheer' }, sprayartist: { pose: 'dance' }, rehearsal: { pose: 'sit' }, ticket: { pose: 'talk' }, ticketvip: { pose: 'talk' }, panning: { pose: 'kneel' }, printcv: { pose: 'talk' }, netbrowse: { pose: 'desk' }, gaming: { pose: 'desk' }, buyfish: { pose: 'talk' }, harbourwalk: { pose: 'cheer' }, eveningclass: { pose: 'desk' }, ictclass: { pose: 'desk' }, sportsfield: { pose: 'run', wander: true }, wassce: { pose: 'study' }, cookclass: { pose: 'cook', prop: 'spoon' }, debate: { pose: 'talk' }, permit: { pose: 'talk' }, permitbribe: { pose: 'talk' }, title: { pose: 'talk' },
   drivetest: { pose: 'desk' }, licensebribe: { pose: 'talk' }, testdrive: { pose: 'drive' },
   // dates
-  date: { pose: 'talk' }, intimate: { pose: 'lie' }, hookup_m: { pose: 'dance' }, hookup: { pose: 'dance' },
+  date: { pose: 'talk' }, spray: { pose: 'dance' }, popbottle: { pose: 'cheer', prop: 'drink' }, intimate: { pose: 'lie' }, hookup_m: { pose: 'dance' }, hookup: { pose: 'dance' },
   // jail / custody
   custody: { pose: 'sit' }, jail: { pose: 'sit' },
 }

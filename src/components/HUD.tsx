@@ -568,6 +568,68 @@ function MinimizedPanel() {
   )
 }
 
+/* ----------------------------- party effects ----------------------------- */
+type FxKind = 'money' | 'bottle'
+interface FxBit { id: number; kind: 'note' | 'drop' | 'spark' | 'bottle'; x: number; up: number; fall: number; r: number; d: number; delay: number; val?: number }
+let fxSeq = 0
+/** Which party effect the current activity calls for. */
+function fxFor(a: { uid: number; defId: string; shift?: { current?: { key: string } | null } | null } | null): { kind: FxKind; key: string } | null {
+  if (!a) return null
+  const id = a.defId.split(':')[0]
+  if (id === 'spray') return { kind: 'money', key: `${a.uid}` }
+  if (id === 'popbottle') return { kind: 'bottle', key: `${a.uid}` }
+  const cur = a.shift?.current
+  if (cur && cur.key === 'bottle') return { kind: 'bottle', key: `${a.uid}:${cur.key}:${(cur as { startedAt?: number }).startedAt ?? ''}` }
+  return null
+}
+/** Cedi notes flying when you spray money, champagne and sparklers when a bottle is popped. */
+function PartyFX() {
+  const fx = useGame((s) => fxFor(s.activity as never))
+  const reduce = useUI((s) => s.settings.reduceMotion)
+  const [bits, setBits] = useState<FxBit[]>([])
+  const key = fx ? `${fx.kind}|${fx.key}` : ''
+  useEffect(() => {
+    if (!fx) return
+    const kind = fx.kind
+    const scale = reduce ? 0.35 : 1
+    const rnd = (a: number, b: number) => a + Math.random() * (b - a)
+    const burst = () => {
+      const now: FxBit[] = []
+      if (kind === 'money') {
+        for (let i = 0; i < Math.round(14 * scale); i++)
+          now.push({ id: fxSeq++, kind: 'note', x: rnd(-260, 260), up: rnd(-320, -160), fall: rnd(120, 360), r: rnd(-540, 540), d: rnd(1.8, 2.8), delay: rnd(0, 0.5), val: [5, 10, 20, 50][Math.floor(Math.random() * 4)] })
+      } else {
+        now.push({ id: fxSeq++, kind: 'bottle', x: 0, up: -40, fall: 0, r: rnd(-20, 20), d: 1.4, delay: 0 })
+        for (let i = 0; i < Math.round(22 * scale); i++) now.push({ id: fxSeq++, kind: 'drop', x: rnd(-120, 120), up: rnd(-340, -200), fall: rnd(40, 200), r: 0, d: rnd(1.1, 1.8), delay: rnd(0, 0.25) })
+        for (let i = 0; i < Math.round(16 * scale); i++) now.push({ id: fxSeq++, kind: 'spark', x: rnd(-200, 200), up: rnd(-260, -80), fall: rnd(-60, 60), r: rnd(0, 360), d: rnd(0.8, 1.4), delay: rnd(0, 0.6) })
+      }
+      const cutoff = fxSeq - 400
+      setBits((cur) => [...cur.filter((b) => b.id > cutoff), ...now])
+    }
+    burst()
+    // keep it going for a few seconds even if the activity itself is quick
+    const every = setInterval(burst, kind === 'money' ? 650 : 1200)
+    const stop = setTimeout(() => clearInterval(every), kind === 'money' ? 5000 : 3600)
+    const clear = setTimeout(() => setBits([]), 8500)
+    return () => { clearInterval(every); clearTimeout(stop); clearTimeout(clear) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, reduce])
+  if (!bits.length) return null
+  return (
+    <div className="party-fx" aria-hidden>
+      {bits.map((b) => (
+        <span
+          key={b.id}
+          className={`fx-${b.kind}`}
+          style={{ '--x': `${b.x}px`, '--up': `${b.up}px`, '--fall': `${b.fall}px`, '--r': `${b.r}deg`, animationDuration: `${b.d}s`, animationDelay: `${b.delay}s` } as React.CSSProperties}
+        >
+          {b.kind === 'note' ? `₵${b.val}` : b.kind === 'bottle' ? '🍾' : b.kind === 'spark' ? '✨' : ''}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function Fade() {
   const view = useGame((s) => s.view)
   const inside = useGame((s) => s.insideDest)
@@ -611,6 +673,7 @@ export function HUD() {
         {panel === 'settings' && <SettingsPanel />}
       </div>
       <MinimizedPanel />
+      <PartyFX />
       <Fade />
       <Toasts />
       <EventModal />
