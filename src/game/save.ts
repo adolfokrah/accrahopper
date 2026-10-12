@@ -68,7 +68,7 @@ function sanitize(raw: unknown): SavedGame {
   out.inventory = Array.isArray(g.inventory)
     ? g.inventory
         .filter((o: any) => o && isNum(o.uid) && o.type in FURNITURE)
-        .map((o: any) => ({ uid: o.uid, type: o.type, placed: o.placed && isNum(o.placed.x) && isNum(o.placed.y) ? { x: o.placed.x, y: o.placed.y, rot: o.placed.rot === 1 ? 1 : 0 } : null }))
+        .map((o: any) => ({ uid: o.uid, type: o.type, placed: o.placed && isNum(o.placed.x) && isNum(o.placed.y) ? { x: o.placed.x, y: o.placed.y, rot: ([0, 1, 2, 3].includes(o.placed.rot) ? o.placed.rot : 0) as 0 | 1 | 2 | 3 } : null }))
     : []
   if (g.friendships && typeof g.friendships === 'object') {
     for (const [k, v] of Object.entries<any>(g.friendships)) if (v && isNum(v.points)) out.friendships[k] = { points: Math.max(0, v.points), talkDay: isNum(v.talkDay) ? v.talkDay : 0, talks: isNum(v.talks) ? v.talks : 0 }
@@ -161,8 +161,8 @@ function sanitize(raw: unknown): SavedGame {
   if (obj(g.homeStyle))
     for (const [tier, st] of Object.entries<any>(g.homeStyle)) {
       if (!(tier in HOMES) || !obj(st)) continue
-      const fixtures: Record<string, { x: number; y: number; rot: 0 | 1 }> = {}
-      if (obj(st.fixtures)) for (const [k, v] of Object.entries<any>(st.fixtures)) if (obj(v) && isNum(v.x) && isNum(v.y)) fixtures[k] = { x: v.x, y: v.y, rot: v.rot === 1 ? 1 : 0 }
+      const fixtures: Record<string, { x: number; y: number; rot: 0 | 1 | 2 | 3; stored?: boolean }> = {}
+      if (obj(st.fixtures)) for (const [k, v] of Object.entries<any>(st.fixtures)) if (obj(v) && isNum(v.x) && isNum(v.y)) fixtures[k] = { x: v.x, y: v.y, rot: ([0, 1, 2, 3].includes(v.rot) ? v.rot : 0) as 0 | 1 | 2 | 3, ...(v.stored ? { stored: true } : {}) }
       out.homeStyle[tier as keyof typeof HOMES] = { wall: typeof st.wall === 'string' ? st.wall : undefined, floor: typeof st.floor === 'string' ? st.floor : undefined, fixtures }
     }
   if (obj(g.bank) && isNum(g.bank.balance)) out.bank = { open: !!g.bank.open, balance: g.bank.balance }

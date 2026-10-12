@@ -24,6 +24,8 @@ export const runtime = {
   },
   /** Walk target inside rooms and buildings (local room coordinates). */
   insideTarget: null as { x: number; z: number } | null,
+  /** Screen position (CSS px) just above the selected furniture, for its floating toolbar. */
+  selAnchor: null as { x: number; y: number } | null,
   /** Set while the player is held (police, arrest, custody): no walking. */
   frozen: false,
   /** Live positions of pedestrians and patrolling police (world tiles). */

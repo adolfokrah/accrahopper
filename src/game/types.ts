@@ -99,6 +99,8 @@ export interface Appearance {
   /** Body: 0 male, 1 female (older saves: male). */
   sex?: number
 }
+/** Furniture facing: quarter turns clockwise from the default (0°, 90°, 180°, 270°). */
+export type Rot = 0 | 1 | 2 | 3
 export type Pronouns = 'he' | 'she' | 'they'
 export type PetType = 'dog' | 'guard' | 'cat' | 'parrot'
 export interface Pet {
@@ -275,7 +277,7 @@ export interface ActivityResult {
 export interface OwnedFurniture {
   uid: number
   type: FurnitureType
-  placed: { x: number; y: number; rot: 0 | 1 } | null
+  placed: { x: number; y: number; rot: Rot } | null
 }
 
 export interface Friendship {

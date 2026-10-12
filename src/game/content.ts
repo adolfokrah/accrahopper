@@ -998,7 +998,7 @@ export interface HomeDef {
   grid: { w: number; d: number }
   door: { x: number; y: number }
   comfort: number
-  fixtures: { type: FurnitureType; x: number; y: number; rot: 0 | 1 }[]
+  fixtures: { type: FurnitureType; x: number; y: number; rot: 0 | 1 | 2 | 3 }[]
   amenities: string[]
   floor: string
 }

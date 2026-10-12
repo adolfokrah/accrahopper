@@ -1,9 +1,9 @@
 'use client'
-import { useFrame, type ThreeEvent } from '@react-three/fiber'
+import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { FURNITURE, isBed } from '@/game/content'
-import { PAINTS, canPlace, extCount, footprint, homeLayout, itemsInHome, type HomeItem } from '@/game/home'
+import { FURNITURE, HOMES, isBed } from '@/game/content'
+import { PAINTS, canPlace, extCount, footprint, homeLayout, itemsInHome, type HomeItem, nextRot } from '@/game/home'
 import { keyVector, runtime } from '@/game/runtime'
 import { useGame } from '@/game/store'
 import { useUI } from '@/game/ui'
@@ -787,7 +787,7 @@ function Item({ item, onClick, selected, dragging, onDragStart, net }: { item: H
       onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = useUI.getState().editMode ? 'grab' : 'pointer' }}
       onPointerOut={() => { document.body.style.cursor = '' }}
     >
-      <group rotation={[0, item.rot ? -Math.PI / 2 : 0, 0]}>
+      <group rotation={[0, (-item.rot * Math.PI) / 2, 0]}>
         {raw.build ? <FurnitureModel type={item.type} /> : <Merged k={item.type}><FurnitureModel type={item.type} /></Merged>}
         {net && isBed(item.type) && <MosquitoNet w={raw.w} d={raw.d} />}
       </group>
@@ -799,6 +799,23 @@ function Item({ item, onClick, selected, dragging, onDragStart, net }: { item: H
       )}
     </group>
   )
+}
+
+/** Projects the selected piece's top to the screen so the HUD can float its toolbar there. */
+function SelectionAnchor({ items }: { items: HomeItem[] }) {
+  const { camera, gl } = useThree()
+  const v = useMemo(() => new THREE.Vector3(), [])
+  useFrame(() => {
+    const ui = useUI.getState()
+    const it = ui.selectedFurniture !== null && ui.holdingUid === null && ui.dragUid === null ? items.find((i) => i.id === ui.selectedFurniture) : undefined
+    if (!it) { runtime.selAnchor = null; return }
+    const fp = footprint(it.type, it.rot)
+    v.set(INTERIOR_ORIGIN.x + it.x + fp.w / 2, 1.5, INTERIOR_ORIGIN.z + it.y + fp.d / 2).project(camera)
+    const r = gl.domElement.getBoundingClientRect()
+    runtime.selAnchor = { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height }
+  })
+  useEffect(() => () => { runtime.selAnchor = null }, [])
+  return null
 }
 
 export function Interior({ visible }: { visible: boolean }) {
@@ -824,7 +841,7 @@ export function Interior({ visible }: { visible: boolean }) {
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null)
   const { w, d } = lay
   const movingUid = dragUid ?? holdingUid
-  const moving = movingUid === null ? undefined : items.find((o) => o.id === movingUid) ?? inventory.map((o) => ({ id: o.uid, type: o.type })).find((o) => o.id === movingUid)
+  const moving = movingUid === null ? undefined : items.find((o) => o.id === movingUid) ?? inventory.map((o) => ({ id: o.uid, type: o.type })).find((o) => o.id === movingUid) ?? (movingUid < 0 && HOMES[tier].fixtures[-movingUid - 1] ? { id: movingUid, type: HOMES[tier].fixtures[-movingUid - 1].type } : undefined)
   const ghost = useMemo(() => {
     if (!moving || !cursor) return null
     const fp = footprint(moving.type, holdRot)
@@ -844,7 +861,7 @@ export function Interior({ visible }: { visible: boolean }) {
       const ui = useUI.getState()
       const c = cursorRef.current
       const st = useGame.getState()
-      const type = ui.dragUid !== null ? (ui.dragUid < 0 ? itemsInHome(st.housing.tier, st.inventory).find((i) => i.id === ui.dragUid)?.type : st.inventory.find((o) => o.uid === ui.dragUid)?.type) : undefined
+      const type = ui.dragUid !== null ? (ui.dragUid < 0 ? HOMES[st.housing.tier].fixtures[-ui.dragUid - 1]?.type : st.inventory.find((o) => o.uid === ui.dragUid)?.type) : undefined
       if (c && type && ui.dragUid !== null) {
         const fp = footprint(type, ui.holdRot)
         const x = c.x - Math.floor((fp.w - 1) / 2)
@@ -857,7 +874,7 @@ export function Interior({ visible }: { visible: boolean }) {
     }
     const cancel = () => { useUI.setState({ dragUid: null }); setCursor(null) }
     const key = (e: KeyboardEvent) => {
-      if (e.key === 'r' || e.key === 'R') useUI.setState((u) => ({ holdRot: u.holdRot === 0 ? 1 : 0 }))
+      if (e.key === 'r' || e.key === 'R') useUI.setState((u) => ({ holdRot: nextRot(u.holdRot) }))
     }
     window.addEventListener('pointerup', up)
     window.addEventListener('pointercancel', cancel)
@@ -961,7 +978,7 @@ export function Interior({ visible }: { visible: boolean }) {
       const cx = it.x + fp.w / 2
       const cz = it.y + fp.d / 2
       const u = furnitureUse(it.type, actId)
-      const fr = it.rot ? -Math.PI / 2 : 0
+      const fr = (-it.rot * Math.PI) / 2
       const ux = perform ? u.dx : 0
       const uz = perform ? u.dz : Math.max(u.dz, FURNITURE[it.type].d / 2 + 0.45)
       return { x: cx + ux * Math.cos(fr) + uz * Math.sin(fr), z: cz - ux * Math.sin(fr) + uz * Math.cos(fr), face: fr + (perform ? u.face : Math.PI), y: perform ? u.y ?? 0 : 0, pose: perform ? u.pose : null, prop: perform ? u.prop ?? null : null, perform }
@@ -1127,7 +1144,8 @@ export function Interior({ visible }: { visible: boolean }) {
           net={upg.includes('net')}
           onDragStart={() => {
             const ui = useUI.getState()
-            if (!ui.editMode || ui.holdingUid) return false
+            // drag in Move & decorate, or in Use mode once the piece is selected
+            if ((!ui.editMode && ui.selectedFurniture !== it.id) || ui.holdingUid) return false
             useUI.setState({ dragUid: it.id, holdRot: it.rot, selectedFurniture: it.id })
             setCursor({ x: it.x + Math.floor((footprint(it.type, it.rot).w - 1) / 2), y: it.y + Math.floor((footprint(it.type, it.rot).d - 1) / 2) })
             return true
@@ -1140,9 +1158,10 @@ export function Interior({ visible }: { visible: boolean }) {
         />
       ))}
 
+      <SelectionAnchor items={items} />
       {ghost && moving && (
         <group position={[ghost.x + ghost.fp.w / 2, 0.12, ghost.y + ghost.fp.d / 2]}>
-          <group rotation={[0, holdRot ? -Math.PI / 2 : 0, 0]}>
+          <group rotation={[0, (-holdRot * Math.PI) / 2, 0]}>
             <FurnitureModel type={moving.type} />
           </group>
           <mesh position={[0, 0.03, 0]} scale={[ghost.fp.w - 0.05, 0.05, ghost.fp.d - 0.05]}>

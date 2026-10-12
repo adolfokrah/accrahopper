@@ -223,7 +223,7 @@ export interface GameState {
   enterBuilding: (destId: string) => void
   exitBuilding: () => void
   buyFurniture: (type: FurnitureType, delivered?: boolean, hold?: boolean) => void
-  placeFurniture: (uid: number, x: number, y: number, rot: 0 | 1) => boolean
+  placeFurniture: (uid: number, x: number, y: number, rot: 0 | 1 | 2 | 3) => boolean
   /** Repaint the current home (needs the paint upgrade). */
   setPaint: (wall: string, floor: string) => void
   storeFurniture: (uid: number) => void
@@ -2401,7 +2401,21 @@ export const useGame = create<GameState>((set, get) => ({
   },
 
   storeFurniture: (uid) => {
-    if (uid < 0) return toast('Built-in furniture stays in the home. Move or rotate it instead.', 'info')
+    if (uid < 0) {
+      // built-in piece: kept in this home's storage, ready to place again
+      const s = get()
+      const tier = s.housing.tier
+      const idx = String(-uid - 1)
+      const fix = HOMES[tier].fixtures[-uid - 1]
+      if (!fix) return
+      const st = s.homeStyle[tier] ?? {}
+      const cur = st.fixtures?.[idx] ?? { x: fix.x, y: fix.y, rot: fix.rot }
+      const homeStyle = { ...s.homeStyle, [tier]: { ...st, fixtures: { ...(st.fixtures ?? {}), [idx]: { ...cur, stored: true } } } }
+      homeRuntime.style = homeStyle
+      set({ homeStyle })
+      return toast(`📦 ${FURNITURE[fix.type].name} moved to storage. Place it again from ✋ Move & decorate.`, 'info')
+    }
+    toast('📦 Moved to storage. Place it again from ✋ Move & decorate.', 'info')
     set((s) => ({ inventory: s.inventory.map((o) => (o.uid === uid ? { ...o, placed: null } : o)) }))
   },
 

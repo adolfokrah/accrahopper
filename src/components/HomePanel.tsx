@@ -1,12 +1,13 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { activitiesForFurniture } from '@/game/activities'
 import { BALANCE, formatMoney } from '@/game/config'
 import { BUILD_PIECES, FURNITURE, HOMES, HOME_TIERS, SELL_BACK, UPGRADES, homeDestId } from '@/game/content'
 import { sfx } from '@/game/audio'
-import { EXTENSIONS, PAINTS, canExtend, comfortOf, extCount, itemsInHome } from '@/game/home'
+import { EXTENSIONS, PAINTS, canExtend, comfortOf, extCount, itemsInHome, nextRot, storedFixtures } from '@/game/home'
 import { walkToDest } from '@/game/nav'
+import { runtime } from '@/game/runtime'
 import { landlordName, useGame } from '@/game/store'
 import { useUI } from '@/game/ui'
 import { ActivityList, RentOutBtn } from './BuildingPanel'
@@ -150,43 +151,58 @@ export function DecoBar() {
   const holdingUid = useUI((u) => u.holdingUid)
   const dragUid = useUI((u) => u.dragUid)
   const holdRot = useUI((u) => u.holdRot)
-  if (!edit || s.view !== 'home' || s.viewing) return null
+  const pop = useRef<HTMLDivElement>(null)
+  // keep the floating toolbar glued above the selected piece
+  useEffect(() => {
+    let id = 0
+    const tick = () => {
+      const a = runtime.selAnchor
+      if (pop.current) {
+        if (a) { pop.current.style.display = ''; pop.current.style.transform = `translate(${Math.round(a.x)}px, ${Math.round(a.y)}px) translate(-50%, -100%)` }
+        else pop.current.style.display = 'none'
+      }
+      id = requestAnimationFrame(tick)
+    }
+    id = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(id)
+  }, [selected])
+  if (s.view !== 'home' || s.viewing || typeof document === 'undefined') return null
   const items = itemsInHome(s.housing.tier, s.inventory)
   const heldId = holdingUid ?? dragUid
-  const held = heldId !== null ? items.find((i) => i.id === heldId) ?? s.inventory.map((o) => ({ id: o.uid, type: o.type, fixture: false })).find((o) => o.id === heldId) : undefined
+  const held = heldId !== null ? items.find((i) => i.id === heldId) ?? s.inventory.map((o) => ({ id: o.uid, type: o.type, fixture: false })).find((o) => o.id === heldId) ?? storedFixtures(s.housing.tier).map((f) => ({ ...f, fixture: true })).find((o) => o.id === heldId) : undefined
   const sel = held ? undefined : items.find((i) => i.id === selected)
-  const it = held ?? sel
-  if (typeof document === 'undefined') return null
-  if (!it) return createPortal(<div className="deco-bar hint">✋ Drag any furniture to move it · tap to select</div>, document.body)
-  return createPortal(
-    <div className="deco-bar" role="toolbar" aria-label="Furniture tools">
-      <span className="deco-name">{FURNITURE[it.type].emoji} {FURNITURE[it.type].name}{held ? ' · tap a green spot' : ''}</span>
-      {held ? (
-        <>
-          <button onClick={() => useUI.setState({ holdRot: holdRot === 0 ? 1 : 0 })}>↻ Rotate</button>
-          <button onClick={() => useUI.setState({ holdingUid: null, dragUid: null })}>✕ Cancel</button>
-        </>
-      ) : (
-        sel && (
-          <>
-            <button onClick={() => {
-              useUI.setState({ holdingUid: sel.id, holdRot: sel.rot, selectedFurniture: null })
-              // phones: fold the sheet so the whole room is free to tap
-              if (window.innerWidth < 760) useUI.setState({ panel: 'none' })
-            }}>✋ Move</button>
-            <button onClick={() => {
-              sfx('click')
-              if (!useGame.getState().placeFurniture(sel.id, sel.x, sel.y, sel.rot === 0 ? 1 : 0)) useUI.setState({ holdingUid: sel.id, holdRot: sel.rot === 0 ? 1 : 0, selectedFurniture: null })
-            }}>↻ Rotate</button>
-            {!sel.fixture && <button onClick={() => { useGame.getState().storeFurniture(sel.id); useUI.setState({ selectedFurniture: null }) }}>📦 Store</button>}
-            {!sel.fixture && <button onClick={() => { sfx('coin'); useGame.getState().sellFurniture(sel.id); useUI.setState({ selectedFurniture: null }) }}>💰 Sell {formatMoney(sellPrice(sel.type))}</button>}
-            <button onClick={() => useUI.setState({ selectedFurniture: null })}>✓ Done</button>
-          </>
-        )
-      )}
-    </div>,
-    document.body,
-  )
+  if (held)
+    return createPortal(
+      <div className="deco-bar" role="toolbar" aria-label="Placing furniture">
+        <span className="deco-name">{FURNITURE[held.type].emoji} {FURNITURE[held.type].name} · tap a green spot</span>
+        <button onClick={() => useUI.setState({ holdRot: nextRot(holdRot) })}>↻ Rotate</button>
+        <button onClick={() => useUI.setState({ holdingUid: null, dragUid: null })}>✕ Cancel</button>
+      </div>,
+      document.body,
+    )
+  if (sel)
+    return createPortal(
+      <div ref={pop} className="item-pop" role="toolbar" aria-label={`${FURNITURE[sel.type].name} tools`} style={{ display: 'none' }}>
+        <b>{FURNITURE[sel.type].emoji} {FURNITURE[sel.type].name}</b>
+        <div className="item-pop-btns">
+          <button onClick={() => {
+            useUI.setState({ editMode: true, holdingUid: sel.id, holdRot: sel.rot, selectedFurniture: null })
+            if (window.innerWidth < 760) useUI.setState({ panel: 'none' })
+          }}>✋ Move</button>
+          <button onClick={() => {
+            sfx('click')
+            if (!useGame.getState().placeFurniture(sel.id, sel.x, sel.y, nextRot(sel.rot))) useUI.setState({ editMode: true, holdingUid: sel.id, holdRot: nextRot(sel.rot), selectedFurniture: null })
+          }}>↻ Rotate</button>
+          <button onClick={() => { sfx('click'); useGame.getState().storeFurniture(sel.id); useUI.setState({ selectedFurniture: null }) }}>📦 Store</button>
+          {!sel.fixture && <button onClick={() => { sfx('coin'); useGame.getState().sellFurniture(sel.id); useUI.setState({ selectedFurniture: null }) }}>💰 {formatMoney(sellPrice(sel.type))}</button>}
+          <button className="x" aria-label="Close" onClick={() => useUI.setState({ selectedFurniture: null })}>✕</button>
+        </div>
+        <small>or drag it</small>
+      </div>,
+      document.body,
+    )
+  if (!edit) return null
+  return createPortal(<div className="deco-bar hint">✋ Tap furniture for tools · drag to move it</div>, document.body)
 }
 
 function Inside() {
@@ -200,10 +216,12 @@ function Inside() {
   const sel = items.find((i) => i.id === selected)
   const holding = s.inventory.find((o) => o.uid === holdingUid)
   const stored = s.inventory.filter((o) => !o.placed)
+  // style is a dependency: stored built-ins live in homeStyle
+  const builtIns = useMemo(() => storedFixtures(s.housing.tier), [s.housing.tier, s.homeStyle]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.key === 'r' || e.key === 'R') && useUI.getState().holdingUid) useUI.setState((u) => ({ holdRot: u.holdRot === 0 ? 1 : 0 }))
+      if ((e.key === 'r' || e.key === 'R') && useUI.getState().holdingUid) useUI.setState((u) => ({ holdRot: nextRot(u.holdRot) }))
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -248,12 +266,6 @@ function Inside() {
           {sel && (
             <>
               <div className="here">{FURNITURE[sel.type].emoji} {FURNITURE[sel.type].name}</div>
-              {/* move, turn or store it straight from here */}
-              <div className="furn-tools">
-                <button onClick={() => { sfx('click'); useUI.setState({ editMode: true, holdingUid: sel.id, holdRot: sel.rot, selectedFurniture: null }); if (window.innerWidth < 760) useUI.setState({ panel: 'none' }) }}>✋ Move</button>
-                <button onClick={() => { sfx('click'); if (!useGame.getState().placeFurniture(sel.id, sel.x, sel.y, sel.rot === 0 ? 1 : 0)) useUI.setState({ editMode: true, holdingUid: sel.id, holdRot: sel.rot === 0 ? 1 : 0, selectedFurniture: null }) }}>↻ Rotate</button>
-                {!sel.fixture && <button onClick={() => { sfx('click'); useGame.getState().storeFurniture(sel.id); useUI.setState({ selectedFurniture: null }) }}>📦 Store</button>}
-              </div>
               {(() => {
                 const list = activitiesForFurniture(s, sel.id)
                 if (!list.length) return <small className="muted">{FURNITURE[sel.type].blurb} (Decoration only. It adds comfort.)</small>
@@ -286,9 +298,19 @@ function Inside() {
             })}
           </div>
           <HomeUpgrades />
-          <b ref={storageRef}>In storage ({stored.length})</b>
-          {stored.length === 0 && <small className="muted">Nothing in storage. Buy furniture at Makola Market.</small>}
+          <b ref={storageRef}>In storage ({stored.length + builtIns.length})</b>
+          {stored.length + builtIns.length === 0 && <small className="muted">Nothing in storage. Store pieces from the room, or buy furniture above.</small>}
           <ul className="inv">
+            {builtIns.map((f) => (
+              <li key={f.id} className="stored">
+                <span className="stored-main">
+                  <span>{FURNITURE[f.type].emoji} {FURNITURE[f.type].name} <Chip>Built-in</Chip></span>
+                  <span className="row">
+                    <Btn small onClick={() => { hold(f.id); sfx('click') }}>Place</Btn>
+                  </span>
+                </span>
+              </li>
+            ))}
             {stored.map((o) => {
               const fresh = o.uid === newItem
               return (

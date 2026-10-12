@@ -1,18 +1,22 @@
 import { FURNITURE, HOMES, UPGRADES, isBed } from './content'
-import type { FurnitureType, HomeTier, OwnedFurniture } from './types'
+import type { FurnitureType, HomeTier, OwnedFurniture, Rot } from './types'
+
+/** Next quarter turn. */
+export const nextRot = (r: Rot): Rot => ((r + 1) % 4) as Rot
 
 export interface HomeItem {
   id: number // owned uid (>0) or fixture id (<0)
   type: FurnitureType
   x: number
   y: number
-  rot: 0 | 1
+  rot: Rot
   fixture: boolean
 }
 
-export function footprint(type: FurnitureType, rot: 0 | 1): { w: number; d: number } {
+export function footprint(type: FurnitureType, rot: Rot): { w: number; d: number } {
   const f = FURNITURE[type]
-  return rot === 0 ? { w: f.w, d: f.d } : { w: f.d, d: f.w }
+  // quarter turns swap width and depth; half turns keep them
+  return rot % 2 === 0 ? { w: f.w, d: f.d } : { w: f.d, d: f.w }
 }
 
 /** Room extension upgrade ids, in the order they must be bought. */
@@ -29,7 +33,9 @@ export function canExtend(s: { owned: HomeTier[]; housing: { tier: HomeTier } })
 export interface FixturePos {
   x: number
   y: number
-  rot: 0 | 1
+  rot: Rot
+  /** Taken out of the room and kept in storage. */
+  stored?: boolean
 }
 export interface HomeStyle {
   wall?: string
@@ -58,12 +64,20 @@ export function homeLayout(tier: HomeTier, ext = 0) {
 export function itemsInHome(tier: HomeTier, inventory: OwnedFurniture[]): HomeItem[] {
   const home = HOMES[tier]
   const moved = homeRuntime.style[tier]?.fixtures ?? {}
-  const out: HomeItem[] = home.fixtures.map((f, i) => {
+  const out: HomeItem[] = []
+  home.fixtures.forEach((f, i) => {
     const m = moved[String(i)]
-    return { id: -(i + 1), type: f.type, x: m ? m.x : f.x, y: m ? m.y : f.y, rot: m ? m.rot : f.rot, fixture: true }
+    if (m?.stored) return
+    out.push({ id: -(i + 1), type: f.type, x: m ? m.x : f.x, y: m ? m.y : f.y, rot: m ? m.rot : f.rot, fixture: true })
   })
   for (const o of inventory) if (o.placed) out.push({ id: o.uid, type: o.type, x: o.placed.x, y: o.placed.y, rot: o.placed.rot, fixture: false })
   return out
+}
+
+/** Built-in pieces of this home that are in storage (ids are negative, like in itemsInHome). */
+export function storedFixtures(tier: HomeTier): { id: number; type: FurnitureType }[] {
+  const moved = homeRuntime.style[tier]?.fixtures ?? {}
+  return HOMES[tier].fixtures.map((f, i) => ({ id: -(i + 1), type: f.type, stored: !!moved[String(i)]?.stored })).filter((x) => x.stored).map(({ id, type }) => ({ id, type }))
 }
 
 export function canPlace(
@@ -72,7 +86,7 @@ export function canPlace(
   type: FurnitureType,
   x: number,
   y: number,
-  rot: 0 | 1,
+  rot: Rot,
   ignoreUid?: number,
   ext = 0,
 ): { ok: boolean; reason?: string } {
@@ -88,9 +102,9 @@ export function canPlace(
   return { ok: true }
 }
 
-export function autoPlace(tier: HomeTier, inventory: OwnedFurniture[], type: FurnitureType, uid: number, ext = 0): { x: number; y: number; rot: 0 | 1 } | null {
+export function autoPlace(tier: HomeTier, inventory: OwnedFurniture[], type: FurnitureType, uid: number, ext = 0): { x: number; y: number; rot: Rot } | null {
   const home = homeLayout(tier, ext)
-  for (const rot of [0, 1] as const)
+  for (const rot of [0, 1, 2, 3] as const)
     for (let y = 0; y < home.d; y++)
       for (let x = 0; x < home.w; x++) if (canPlace(tier, inventory, type, x, y, rot, uid, ext).ok) return { x, y, rot }
   return null

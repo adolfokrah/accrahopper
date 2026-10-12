@@ -118,7 +118,7 @@ interface UIState {
   dragUid: number | null
   /** Ride camera: inside the vehicle or chasing it. */
   rideCam: 'inside' | 'chase'
-  holdRot: 0 | 1
+  holdRot: 0 | 1 | 2 | 3
   /** Furniture just bought: highlighted in storage with placing tips. */
   newItem: number | null
   selectedFurniture: number | null
