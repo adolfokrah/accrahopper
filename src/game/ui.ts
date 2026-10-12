@@ -122,6 +122,10 @@ interface UIState {
   selectedFurniture: number | null
   /** Pedestrian picked as a robbery target (index into the ambient crowd). */
   robTarget: number | null
+  /** Hide the goal and needs overlays ("Clean screen"). */
+  clean: boolean
+  /** Needs pill shows names. */
+  needsOpen: boolean
   trackedDest: string | null
   helpSeen: boolean
   /** Destination whose transport options sheet is open. */
@@ -169,6 +173,8 @@ export const useUI = create<UIState>((set, get) => ({
   holdingUid: null,
   dragUid: null,
   robTarget: null,
+  clean: false,
+  needsOpen: false,
   rideCam: 'inside',
   holdRot: 0,
   selectedFurniture: null,

@@ -19,123 +19,7 @@ import { RobPrompt } from './RobPrompt'
 import { PhonePanel } from './Phone'
 import { SettingsPanel } from './SettingsPanel'
 import { CourtModal, StatusChips, TaskList, TravelSheet } from './LifeUI'
-
-/* ------------------------------ top bar ------------------------------- */
-function TopBar() {
-  const profile = useGame((s) => s.profile)
-  const money = useGame((s) => s.money)
-  const dirty = useGame((s) => s.dirty)
-  const minutes = useGame((s) => s.minutes)
-  const housing = useGame((s) => s.housing)
-  const paused = useUI((s) => s.paused)
-  const prev = useRef(money)
-  const [delta, setDelta] = useState<{ v: number; k: number } | null>(null)
-  useEffect(() => {
-    if (money !== prev.current) {
-      setDelta({ v: money - prev.current, k: Date.now() })
-      prev.current = money
-      const t = setTimeout(() => setDelta(null), 1800)
-      return () => clearTimeout(t)
-    }
-  }, [money])
-  const h = hourOf(minutes)
-  const night = h < 6 || h >= 19
-  const rentIn = housing.nextRentDue - minutes
-  const rentChip = housing.homeless ? 'Homeless' : housing.overdueSince !== null ? 'Notice to quit!' : rentIn < 48 * 60 ? `Rent in ${Math.max(1, Math.ceil(rentIn / 1440))}d` : null
-  const rent = HOMES[housing.tier].rent
-  return (
-    <div className="topbar">
-      <button className="card pill who" onClick={() => useUI.getState().setPanel('character')} aria-label="Character">
-        <span className="avatar-dot">{profile?.name?.[0]?.toUpperCase() ?? '?'}</span>
-        <span className="who-name">{profile?.name}</span>
-      </button>
-      <div className="card pill clock" aria-label="Day and time">
-        <span>{night ? '🌙' : '☀️'}</span>
-        <b>{formatClock(minutes)}</b>
-        <span className="muted">Day {dayOf(minutes)}</span>
-        <span className="muted city">· {GAME_CONFIG.cityName}</span>
-      </div>
-      <NeedsBar />
-      <div className="topbar-right">
-        {rentChip && (
-          <button className={`card pill rentchip ${housing.homeless || housing.overdueSince !== null || money < rent ? 'bad' : ''}`} onClick={() => { if (housing.homeless) return useUI.getState().setPanel('home'); useUI.setState({ phoneTab: 'wallet' }); useUI.getState().setPanel('phone') }}>
-            {housing.homeless ? '🧳' : '🏠'} {rentChip}
-          </button>
-        )}
-        {dirty > 0 && (
-          <button className="card pill dirtychip" title="Dirty cash: launder it in Phone → Wallet" onClick={() => { useUI.setState({ phoneTab: 'wallet' }); useUI.getState().setPanel('phone') }}>
-            💸 {formatMoney(dirty)} dirty
-          </button>
-        )}
-        <button className="card pill money" onClick={() => { useUI.setState({ phoneTab: 'wallet' }); useUI.getState().setPanel('phone') }} aria-label="Wallet">
-          <span>💰</span>
-          <b>{formatMoney(money)}</b>
-          {delta && (
-            <i key={delta.k} className={`delta ${delta.v >= 0 ? 'up' : 'down'}`}>
-              {delta.v >= 0 ? '+' : ''}
-              {formatMoney(delta.v)}
-            </i>
-          )}
-        </button>
-        <button className="card icon-btn" onClick={() => useUI.setState({ paused: !paused })} aria-label={paused ? 'Resume' : 'Pause'} title="Pause (P)">
-          {paused ? '▶' : '⏸'}
-        </button>
-        <button className="card icon-btn" onClick={() => useUI.getState().setPanel('settings')} aria-label="Settings">
-          ⚙️
-        </button>
-      </div>
-    </div>
-  )
-}
-
-/* ------------------------------ needs ------------------------------- */
-/** Compact needs strip in the top bar; tap to see names and values. */
-function NeedsBar() {
-  const needs = useGame((s) => s.needs)
-  const [open, setOpen] = useState(false)
-  const low = NEED_IDS.filter((k) => needs[k] < BALANCE.lowNeed)
-  return (
-    <div className="needs-wrap">
-      <button className={`card pill needs-bar ${low.length ? 'warn' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open} aria-label="Needs">
-        {NEED_IDS.map((k) => {
-          const v = needs[k]
-          const tone = v < BALANCE.lowNeed ? 'red' : v < 45 ? 'gold' : 'green'
-          return (
-            <span key={k} className={`nb ${tone}`} title={`${NEED_META[k].label}: ${Math.round(v)}`}>
-              <span className="nb-ico">{NEED_META[k].emoji}</span>
-              <span className="nb-meter"><i style={{ height: `${Math.max(4, v)}%` }} /></span>
-            </span>
-          )
-        })}
-      </button>
-      {open && (
-        <div className="needs-pop" onClick={() => setOpen(false)}>
-          <NeedsPanel />
-        </div>
-      )}
-    </div>
-  )
-}
-
-function NeedsPanel() {
-  const needs = useGame((s) => s.needs)
-  return (
-    <div className="card needs" aria-label="Needs">
-      {NEED_IDS.map((k: NeedId) => {
-        const v = needs[k]
-        const tone = v < BALANCE.lowNeed ? 'red' : v < 45 ? 'gold' : 'green'
-        return (
-          <div key={k} className={`need ${v < BALANCE.lowNeed ? 'low' : ''}`} title={`${NEED_META[k].label}: ${Math.round(v)}`}>
-            <span className="need-ico">{NEED_META[k].emoji}</span>
-            <span className="need-name">{NEED_META[k].label}</span>
-            <Meter value={v} tone={tone} label={NEED_META[k].label} />
-            <span className="need-val">{Math.round(v)}</span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
+import { LeftStack, NavBar, TopPill } from './HudChrome'
 
 /* ---------------------------- journal ---------------------------- */
 /** One tidy card: current goal, today's tasks and status, with tabs. Collapsible. */
@@ -146,9 +30,6 @@ function Journal() {
   const tutorialDone = useGame((s) => s.tutorial.done)
   const [open, setOpen] = useState(true)
   const [tab, setTab] = useState<'goal' | 'today'>('goal')
-  useEffect(() => {
-    if (window.innerWidth < 760) setOpen(false)
-  }, [])
   const tag = o.kind === 'tutorial' ? `Step ${o.step}/${o.steps}` : o.kind === 'urgent' ? 'Urgent' : 'Goal'
   return (
     <div className={`card journal objective ${o.kind} ${open ? '' : 'collapsed'}`}>
@@ -310,44 +191,6 @@ function ActivityBar() {
   )
 }
 
-/* ---------------------------- navigation ---------------------------- */
-function BottomNav() {
-  const panel = useUI((s) => s.panel)
-  const phoneTab = useUI((s) => s.phoneTab)
-  const view = useGame((s) => s.view)
-  const set = (p: PanelId) => {
-    sfx('click')
-    useUI.getState().setPanel(panel === p ? 'none' : p)
-    if (p !== 'building') useUI.setState({ selectedDest: panel === p ? null : useUI.getState().selectedDest })
-  }
-  const tabs: { id: string; icon: string; label: string; active: boolean; onClick: () => void }[] = [
-    {
-      id: 'world', icon: '🌍', label: 'World', active: panel === 'none' || panel === 'building',
-      onClick: () => {
-        sfx('click')
-        if (view === 'home') useGame.getState().exitHome()
-        else if (view === 'inside') useGame.getState().exitBuilding()
-        else useUI.setState({ panel: 'none', selectedDest: null })
-      },
-    },
-    { id: 'home', icon: '🏠', label: 'Home', active: panel === 'home', onClick: () => set('home') },
-    { id: 'phone', icon: '📱', label: 'Phone', active: panel === 'phone' && phoneTab !== 'jobs' && phoneTab !== 'assets', onClick: () => { useUI.setState({ phoneTab: 'home' }); set('phone') } },
-    { id: 'jobs', icon: '💼', label: 'Jobs', active: panel === 'phone' && phoneTab === 'jobs', onClick: () => { sfx('click'); useUI.setState({ phoneTab: 'jobs' }); useUI.getState().setPanel(panel === 'phone' && phoneTab === 'jobs' ? 'none' : 'phone') } },
-    { id: 'assets', icon: '🏘️', label: 'Assets', active: panel === 'phone' && phoneTab === 'assets', onClick: () => { sfx('click'); useUI.setState({ phoneTab: 'assets' }); useUI.getState().setPanel(panel === 'phone' && phoneTab === 'assets' ? 'none' : 'phone') } },
-    { id: 'character', icon: '🧍', label: 'Me', active: panel === 'character', onClick: () => set('character') },
-  ]
-  return (
-    <nav className="card bottom-nav" aria-label="Main navigation">
-      {tabs.map((t) => (
-        <button key={t.id} className={`tab ${t.active ? 'active' : ''}`} onClick={t.onClick} aria-current={t.active ? 'page' : undefined}>
-          <span className="tab-ico">{t.icon}</span>
-          <span>{t.label}</span>
-        </button>
-      ))}
-    </nav>
-  )
-}
-
 /** Compass: the needle shows where north is; tap to turn the map north-up. */
 function Compass() {
   const [yaw, setYaw] = useState(0)
@@ -369,12 +212,13 @@ function ViewControls() {
   const view = useGame((s) => s.view)
   return (
     <div className="view-controls">
-      {view === 'world' && <Compass />}
-      <button className="card icon-btn" onClick={() => zoomBy(1.25)} aria-label="Zoom in" title="Zoom in (mouse wheel)">＋</button>
-      <button className="card icon-btn" onClick={() => zoomBy(1 / 1.25)} aria-label="Zoom out" title="Zoom out (mouse wheel)">－</button>
-      <button className="card icon-btn" onClick={() => { sfx('click'); rotateCam(-1) }} aria-label="Rotate view left" title="Rotate left (Q)">⟲</button>
-      <button className="card icon-btn" onClick={() => { sfx('click'); rotateCam(1) }} aria-label="Rotate view right" title="Rotate right (R)">⟳</button>
-      {view === 'world' && <button className="card icon-btn find" onClick={() => { sfx('click'); findMyCharacter() }} aria-label="Find my character" title="Find my character (F)">🎯</button>}
+      {/* phones keep only zoom; rotate, compass and find-me are desktop extras */}
+      {view === 'world' && <span className="vc-extra"><Compass /></span>}
+      <button className="card icon-btn vc-zoom" onClick={() => zoomBy(1.25)} aria-label="Zoom in" title="Zoom in (mouse wheel)">＋</button>
+      <button className="card icon-btn vc-zoom" onClick={() => zoomBy(1 / 1.25)} aria-label="Zoom out" title="Zoom out (mouse wheel)">－</button>
+      <button className="card icon-btn vc-extra" onClick={() => { sfx('click'); rotateCam(-1) }} aria-label="Rotate view left" title="Rotate left (Q)">⟲</button>
+      <button className="card icon-btn vc-extra" onClick={() => { sfx('click'); rotateCam(1) }} aria-label="Rotate view right" title="Rotate right (R)">⟳</button>
+      {view === 'world' && <button className="card icon-btn find vc-extra" onClick={() => { sfx('click'); findMyCharacter() }} aria-label="Find my character" title="Find my character (F)">🎯</button>}
     </div>
   )
 }
@@ -663,8 +507,11 @@ export function HUD() {
     return () => { runtime.uiShift = 0 }
   }, [panel, view])
   return (
-    <div className="hud">
-      <TopBar />
+    <div className="hud hud2">
+      <div className="hb-head">
+        <TopPill />
+        <LeftStack journal={<Journal />} />
+      </div>
       <ViewControls />
       {/* stacked right above the bottom navigation: alerts, activity, the door you are at, then your goal */}
       <div className="bottom-stack">
@@ -672,9 +519,8 @@ export function HUD() {
         <ResultCard />
         <ActivityBar />
         <EnterPrompt />
-        <Journal />
       </div>
-      <BottomNav />
+      <NavBar />
       {panel === 'phone' && <PhonePanel />}
       <div className={`panel-slot ${panel !== 'none' && panel !== 'phone' ? 'open' : ''}`}>
         {panel === 'building' && selectedDest && <BuildingPanel key={selectedDest} />}

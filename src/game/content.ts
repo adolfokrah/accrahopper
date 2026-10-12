@@ -14,22 +14,37 @@ import type {
 /* ------------------------------------------------------------------ */
 /* Character customisation                                             */
 /* ------------------------------------------------------------------ */
-export const SKIN_TONES = ['#f3cfa6', '#e2b183', '#c68a56', '#8d5a34', '#6a4026', '#46291a']
-export const HAIRSTYLES = ['Short crop', 'Afro', 'Braids', 'Bald', 'Top bun', 'Headwrap']
-export const HAIR_COLORS = ['#1c1a1a', '#3a2418', '#7a4a22', '#c9892f', '#b83a3a', '#6a3aa0']
+export const SKIN_TONES = ['#f3cfa6', '#e2b183', '#c68a56', '#8d5a34', '#6a4026', '#46291a', '#a86b40', '#5a3520']
+export const HAIRSTYLES = ['Short crop', 'Afro', 'Braids', 'Bald', 'Top bun', 'Headwrap', 'Dreadlocks', 'Cornrows', 'High puff', 'Twists', 'Low fade']
+export const HAIR_COLORS = ['#1c1a1a', '#3a2418', '#7a4a22', '#c9892f', '#b83a3a', '#6a3aa0', '#d9d4c8']
+export const BODY_TYPES = ['Slim', 'Average', 'Broad']
+export const BEARDS = ['None', 'Stubble', 'Goatee', 'Full beard']
 export interface OutfitDef {
   name: string
   bottom: string
-  style: 'tee' | 'smart' | 'ankara' | 'sport'
+  style: 'tee' | 'smart' | 'ankara' | 'sport' | 'jersey' | 'kaftan' | 'hoodie' | 'dress'
 }
 export const OUTFITS: OutfitDef[] = [
   { name: 'Street casual', bottom: '#3b5a8c', style: 'tee' },
   { name: 'Smart office', bottom: '#2c3442', style: 'smart' },
   { name: 'Kente cloth', bottom: '#f4d9a6', style: 'ankara' },
   { name: 'Sporty set', bottom: '#2f3b52', style: 'sport' },
+  { name: 'Football jersey', bottom: '#f4f4f4', style: 'jersey' },
+  { name: 'Kaftan', bottom: '#e9dcc0', style: 'kaftan' },
+  { name: 'Hoodie & jeans', bottom: '#34507a', style: 'hoodie' },
+  { name: 'Office dress', bottom: '#2c3442', style: 'dress' },
 ]
-export const OUTFIT_COLORS = ['#e0524a', '#2e86de', '#f1b82d', '#2fa866', '#8e5bd0', '#f0ede6', '#ee7d2d']
-export const ACCESSORIES = ['None', 'Glasses', 'Cap', 'Gold chain', 'Backpack', 'Headphones']
+export const OUTFIT_COLORS = ['#e0524a', '#2e86de', '#f1b82d', '#2fa866', '#8e5bd0', '#f0ede6', '#ee7d2d', '#1b1b1b', '#7a1f3d', '#0f766e']
+export const ACCESSORIES = ['None', 'Glasses', 'Cap', 'Gold chain', 'Backpack', 'Headphones', 'Sunglasses', 'Wristwatch', 'Earrings', 'Beanie', 'Kufi cap']
+/** A random look for passers-by and staff. */
+export function randomAppearance(r: () => number = Math.random): Appearance {
+  const pick = (n: number) => Math.floor(r() * n)
+  return {
+    skin: pick(SKIN_TONES.length), hair: pick(HAIRSTYLES.length), hairColor: r() < 0.8 ? pick(3) : pick(HAIR_COLORS.length),
+    outfit: pick(OUTFITS.length), outfitColor: pick(OUTFIT_COLORS.length), accessory: r() < 0.6 ? 0 : pick(ACCESSORIES.length),
+    body: pick(BODY_TYPES.length), beard: r() < 0.6 ? 0 : pick(BEARDS.length),
+  }
+}
 
 export const DEFAULT_APPEARANCE: Appearance = {
   skin: 3,
@@ -38,6 +53,8 @@ export const DEFAULT_APPEARANCE: Appearance = {
   outfit: 0,
   outfitColor: 1,
   accessory: 0,
+  body: 1,
+  beard: 0,
 }
 
 /* ------------------------------------------------------------------ */
@@ -138,9 +155,12 @@ export interface Destination {
 }
 
 /* ---------------------------- city grid ---------------------------- */
-/** Grid street layout: 4-wide streets (two lanes each way) every 14 tiles; blocks are 10x10 inside. */
+/** Grid street layout: 4-wide streets (two lanes each way) every 18 tiles; blocks are 14x14 inside, so buildings have room to breathe. */
 export const STREET_START = 10
-export const STREET_GAP = 14
+export const STREET_GAP = 18
+/** Map size grows with the street spacing (the city was laid out for 240x172 at a 14-tile gap). */
+export const MAP_W = Math.round(10 + 230 * (STREET_GAP / 14))
+export const MAP_H = Math.round(10 + 162 * (STREET_GAP / 14))
 export const STREET_W = 4
 /** Extra block rings added west and north of the original city. */
 export const RING = 2
@@ -397,7 +417,7 @@ const HOUSES_PER_AREA = 2
       for (let r = -2; r <= 9 && list.length < HOUSES_PER_AREA; r++)
         for (const xoff of [0, 4]) {
           const p = at(c, r, 6, 5, xoff)
-          if (p.x < 1 || p.z < 1 || p.x + p.w > 236 || p.z + p.d > 168) continue
+          if (p.x < 1 || p.z < 1 || p.x + p.w > MAP_W - 4 || p.z + p.d > MAP_H - 4) continue
           if (areaAt(p.x + 3, p.z + 2.5).id !== areaId) continue
           const safe = clearOfRoads(p)
           if (safe.x !== p.x || safe.z !== p.z || safe.w !== p.w || safe.d !== p.d) continue
@@ -452,7 +472,7 @@ const GEN_PLOTS: { dest: Destination; price: number; growth: number; guardRisk: 
     for (let r = -2; r <= 9; r++)
       for (const xoff of [0, 3, 6]) {
         const p = at(c, r, 3, 5, xoff)
-        if (p.x < 1 || p.z < 1 || p.x + p.w > 236 || p.z + p.d > 168) continue
+        if (p.x < 1 || p.z < 1 || p.x + p.w > MAP_W - 4 || p.z + p.d > MAP_H - 4) continue
         const safe = clearOfRoads(p)
         if (safe.x !== p.x || safe.z !== p.z || safe.w !== p.w || safe.d !== p.d) continue
         // dry land with room for a beach between the plot and the sea

@@ -1,6 +1,6 @@
 'use client'
 import { dayOf, formatMoney } from '@/game/config'
-import { ACCESSORIES, FURNITURE, HAIRSTYLES, HAIR_COLORS, OUTFITS, OUTFIT_COLORS, SKIN_TONES, TRAITS } from '@/game/content'
+import { ACCESSORIES, BEARDS, BODY_TYPES, FURNITURE, HAIRSTYLES, HAIR_COLORS, OUTFITS, OUTFIT_COLORS, SKIN_TONES, TRAITS } from '@/game/content'
 import { useGame } from '@/game/store'
 import { useUI } from '@/game/ui'
 import { Chip, Sheet, Meter } from './kit'
@@ -43,7 +43,9 @@ export function CharacterPanel() {
       </div>
       <b>Wardrobe (free to change)</b>
       <label className="lbl">Skin tone</label><Swatches colors={SKIN_TONES} value={a.skin} onChange={(skin) => set({ skin })} label="Skin tone" />
+      <label className="lbl">Build</label><Pills items={BODY_TYPES} value={a.body ?? 1} onChange={(body) => set({ body })} label="Build" />
       <label className="lbl">Hairstyle</label><Pills items={HAIRSTYLES} value={a.hair} onChange={(hair) => set({ hair })} label="Hairstyle" />
+      <label className="lbl">Facial hair</label><Pills items={BEARDS} value={a.beard ?? 0} onChange={(beard) => set({ beard })} label="Facial hair" />
       <label className="lbl">Hair colour</label><Swatches colors={HAIR_COLORS} value={a.hairColor} onChange={(hairColor) => set({ hairColor })} label="Hair colour" />
       <label className="lbl">Outfit</label><Pills items={OUTFITS.map((o) => o.name)} value={a.outfit} onChange={(outfit) => set({ outfit })} label="Outfit" />
       <label className="lbl">Outfit colour</label><Swatches colors={OUTFIT_COLORS} value={a.outfitColor} onChange={(outfitColor) => set({ outfitColor })} label="Outfit colour" />

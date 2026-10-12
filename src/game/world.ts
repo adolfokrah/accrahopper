@@ -1,9 +1,7 @@
-import { AREAS, DESTINATIONS, LAGOON, OX, OZ, ROAD_CLASS, coastZ, STREET_GAP, STREET_START, STREET_W, areaAt, isInnerRoad, mapXf, streetSpan, unmapX, type AreaStyle, type RoadClass } from './content'
+import { AREAS, DESTINATIONS, LAGOON, MAP_H, MAP_W, OX, OZ, ROAD_CLASS, coastZ, STREET_GAP, STREET_START, STREET_W, areaAt, isInnerRoad, mapXf, streetSpan, unmapX, type AreaStyle, type RoadClass } from './content'
 import type { DistrictId } from './types'
 
-export const MAP_W = 240
-export const MAP_H = 172
-export { STREET_W }
+export { MAP_W, MAP_H, STREET_W }
 
 export const G = { GRASS: 0, ROAD: 1, SIDEWALK: 2, PLAZA: 3, BOARDWALK: 4, SAND: 5, WATER: 6, DIRT: 7, FOREST: 8, CONCRETE: 9 } as const
 
@@ -181,13 +179,16 @@ export const trees: Tree[] = []
 export const lamps: Lamp[] = []
 
 function free(x0: number, z0: number, w: number, d: number, pad: number) {
-  for (let z = z0 - 1; z < z0 + d + 1; z++)
-    for (let x = x0 - 1; x < x0 + w + 1; x++) {
+  const ring = Math.max(1, pad)
+  for (let z = z0 - ring; z < z0 + d + ring; z++)
+    for (let x = x0 - ring; x < x0 + w + ring; x++) {
       if (!inMap(x, z)) return false
       const i = idx(x, z)
       const inside = x >= x0 && x < x0 + w && z >= z0 && z < z0 + d
-      if (destOcc[i]) return false
+      const edge = x >= x0 - 1 && x < x0 + w + 1 && z >= z0 - 1 && z < z0 + d + 1
+      if (destOcc[i] && edge) return false
       if (occupied[i] && (inside || pad > 0)) return false
+      if (!edge) continue
       const g = ground[i]
       if (g === G.WATER || g === G.ROAD) return false
       if (inside && (g === G.SIDEWALK || g === G.SAND)) return false
@@ -211,7 +212,8 @@ for (const [x0, x1] of blocksX) {
       const x = x0 + Math.floor(rand() * (x1 - x0 - w + 2))
       const z = z0 + Math.floor(rand() * (z1 - z0 - d + 2))
       if (rand() > sp.density) continue
-      if (!free(x, z, w, d, style === 'dense' || style === 'coastal' || style === 'upscale' ? 0 : 1)) continue
+      // keep a tile of space between buildings (two in leafy areas) so the city feels open
+      if (!free(x, z, w, d, style === 'campus' || style === 'forest' || style === 'upscale' ? 2 : 1)) continue
       for (let zz = z; zz < z + d; zz++) for (let xx = x; xx < x + w; xx++) {
         occupied[idx(xx, zz)] = 1
         blocked[idx(xx, zz)] = 1

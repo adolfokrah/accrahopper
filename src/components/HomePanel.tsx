@@ -9,7 +9,7 @@ import { EXTENSIONS, PAINTS, canExtend, comfortOf, extCount, itemsInHome } from 
 import { walkToDest } from '@/game/nav'
 import { landlordName, useGame } from '@/game/store'
 import { useUI } from '@/game/ui'
-import { ActivityRow, RentOutBtn } from './BuildingPanel'
+import { ActivityList, RentOutBtn } from './BuildingPanel'
 import { Catalogue } from './Catalogue'
 import { Btn, Chip, Sheet } from './kit'
 
@@ -184,7 +184,6 @@ function Inside() {
   const edit = useUI((u) => u.editMode)
   const holdingUid = useUI((u) => u.holdingUid)
   const holdRot = useUI((u) => u.holdRot)
-  const [open, setOpen] = useState<string | null>(null)
   const home = HOMES[s.housing.tier]
   const items = itemsInHome(s.housing.tier, s.inventory)
   const sel = items.find((i) => i.id === selected)
@@ -225,7 +224,7 @@ function Inside() {
               {(() => {
                 const list = activitiesForFurniture(s, sel.id)
                 if (!list.length) return <small className="muted">{FURNITURE[sel.type].blurb} (Decoration only. It adds comfort.)</small>
-                return <div className="act-list">{list.map((r) => <ActivityRow key={r.def.id} r={r} open={open === r.def.id} onToggle={() => setOpen(open === r.def.id ? null : r.def.id)} />)}</div>
+                return <ActivityList list={list} />
               })()}
             </>
           )}

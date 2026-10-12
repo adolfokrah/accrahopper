@@ -2,6 +2,9 @@ import { BALANCE } from './config'
 import { alongPath, approachZone, rideLanePath } from './lanes'
 import { PLAYER_START, canStand, findPath, nearestWalkable } from './world'
 
+/** Starting camera zoom: phones see more of the city around the player. */
+export const defaultZoom = () => (typeof window !== 'undefined' && Math.min(window.innerWidth, window.innerHeight) < 600 ? 24 : 34)
+
 /** Mutable per-frame state shared by renderers (kept outside React/Zustand for speed). */
 export const runtime = {
   player: { x: PLAYER_START.x, z: PLAYER_START.z, rot: 0, moving: false, speed: 0 },
@@ -12,7 +15,7 @@ export const runtime = {
   onRideEnd: null as null | (() => void),
   keys: { up: false, down: false, left: false, right: false },
   cam: {
-    x: PLAYER_START.x, z: PLAYER_START.z, zoom: 36, follow: true, snap: true, yaw: Math.PI / 4, yawTarget: Math.PI / 4,
+    x: PLAYER_START.x, z: PLAYER_START.z, zoom: defaultZoom(), follow: true, snap: true, yaw: Math.PI / 4, yawTarget: Math.PI / 4,
     /** Inside rooms/buildings: true while the camera frames an interior. */
     inside: false,
     /** Interior zoom multiplier (mouse wheel / pinch) and pan offset in room units. */

@@ -6,7 +6,7 @@ import type { NeedId, Profile } from './types'
 
 const KEY = GAME_CONFIG.save.key
 /** Bump when the city layout changes so saved positions are reset. */
-const MAP_VERSION = 3
+const MAP_VERSION = 4
 
 export interface SaveEnvelope {
   version: number

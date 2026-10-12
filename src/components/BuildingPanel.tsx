@@ -54,57 +54,88 @@ import { Btn, Chip, Meter, Sheet } from './kit'
 
 const fmtHour = (h: number) => (h === 24 ? 'midnight' : `${h % 12 === 0 ? 12 : h % 12}${h >= 12 && h < 24 ? 'pm' : 'am'}`)
 
-export function ActivityRow({ r, open, onToggle }: { r: Resolved; open: boolean; onToggle: () => void }) {
-  const effects = describeEffects(r)
-  const confirm = () => {
-    if (r.def.kind === 'travel') {
-      useGame.getState().startRide('trotro', r.def.id.slice(7))
-    } else {
+/** Category chips for long activity lists. */
+const ACT_CATS: { id: string; label: string; kinds: string[] }[] = [
+  { id: 'all', label: '✨ All', kinds: [] },
+  { id: 'food', label: '🍛 Food', kinds: ['meal'] },
+  { id: 'fun', label: '🎉 Fun', kinds: ['generic', 'social', 'date', 'event', 'sleep'] },
+  { id: 'earn', label: '💰 Earn', kinds: ['work', 'oddjob', 'freelance'] },
+  { id: 'learn', label: '📚 Learn', kinds: ['study'] },
+  { id: 'crime', label: '🕶️ Risky', kinds: ['crime'] },
+]
+const NEED_TAG: Record<string, { label: string; cls: string }> = {
+  hunger: { label: 'Food', cls: 'food' }, energy: { label: 'Energy', cls: 'energy' }, hygiene: { label: 'Clean', cls: 'clean' },
+  bladder: { label: 'Toilet', cls: 'clean' }, fun: { label: 'Fun', cls: 'fun' }, social: { label: 'Social', cls: 'social' },
+}
+
+/** Activities as tappable cards: tap to start (or see why you can't). */
+export function ActivityList({ list }: { list: Resolved[] }) {
+  const [cat, setCat] = useState('all')
+  const [info, setInfo] = useState<string | null>(null)
+  const cats = ACT_CATS.filter((c) => c.id === 'all' || list.some((r) => c.kinds.includes(r.def.kind)))
+  const shown = cat === 'all' ? list : list.filter((r) => ACT_CATS.find((c) => c.id === cat)!.kinds.includes(r.def.kind))
+  const start = (r: Resolved) => {
+    if (!r.ok) {
+      sfx('error')
+      useUI.getState().toast(`${r.def.icon} ${r.reason ?? 'Not available right now'}`, 'warn')
+      return
+    }
+    if (r.def.kind === 'travel') useGame.getState().startRide('trotro', r.def.id.slice(7))
+    else {
       const res = useGame.getState().startActivity(r.def.id, r.ctx)
       if (res.ok) sfx(r.cost ? 'coin' : 'start')
     }
-    onToggle()
   }
+  const detail = info ? list.find((r) => r.def.id === info) : undefined
   return (
-    <div className={`act ${open ? 'open' : ''} ${r.ok ? '' : 'blocked'}`}>
-      <button className="act-head" onClick={onToggle} aria-expanded={open}>
-        <span className="act-icon">{r.def.icon}</span>
-        <span className="act-text">
-          <b>{r.def.label}</b>
-          <small>{r.def.blurb}</small>
-        </span>
-        <span className="act-meta">
-          <Chip tone={r.cost ? 'gold' : 'neutral'}>{r.cost ? formatMoney(r.cost) : 'Free'}</Chip>
-          <Chip tone="blue">{formatDuration(r.minutes)}</Chip>
-        </span>
-      </button>
-      {open && (
-        <div className="act-detail">
-          <div className="chips">
-            <Chip tone="gold">Cost: {r.cost ? formatMoney(r.cost) : 'Free'}</Chip>
-            <Chip tone="blue">Time: {formatDuration(r.minutes)}</Chip>
-            {effects.map((e, i) => (
-              <Chip key={i} tone={e.tone}>{e.label}</Chip>
-            ))}
-          </div>
-          {r.reason && <p className="reason">⚠️ {r.reason}</p>}
-          <Btn disabled={!r.ok} onClick={confirm}>
-            {r.def.kind === 'travel' ? 'Board and ride' : r.def.kind === 'work' ? 'Start shift' : 'Confirm'}
-          </Btn>
+    <>
+      {list.length > 4 && cats.length > 2 && (
+        <div className="act-cats" role="tablist">
+          {cats.map((c) => (
+            <button key={c.id} role="tab" aria-selected={cat === c.id} className={cat === c.id ? 'on' : ''} onClick={() => { sfx('click'); setCat(c.id) }}>{c.label}</button>
+          ))}
         </div>
       )}
-    </div>
-  )
-}
-
-function ActivityList({ list }: { list: Resolved[] }) {
-  const [open, setOpen] = useState<string | null>(null)
-  return (
-    <div className="act-list">
-      {list.map((r) => (
-        <ActivityRow key={r.def.id} r={r} open={open === r.def.id} onToggle={() => setOpen(open === r.def.id ? null : r.def.id)} />
-      ))}
-    </div>
+      <div className="act-grid">
+        {shown.map((r) => {
+          const tags = Object.entries(r.needs).filter(([, v]) => (v ?? 0) > 0).slice(0, 3).map(([k]) => NEED_TAG[k])
+          return (
+            <div key={r.def.id} className={`act-card ${r.ok ? '' : 'blocked'} ${r.def.kind === 'crime' ? 'risky' : ''}`}>
+              <button className="act-card-main" onClick={() => start(r)} aria-label={`${r.def.label}${r.ok ? '' : `: ${r.reason}`}`}>
+                <span className="act-card-top">
+                  <span className="act-card-ico" aria-hidden>{r.def.icon}</span>
+                  <span className="act-card-meta">
+                    <small className="act-time">⏱ {formatDuration(r.minutes)}</small>
+                    <b className={r.reward ? 'earn' : r.cost ? 'cost' : 'free'}>{r.reward ? `+${formatMoney(r.reward)}` : r.cost ? formatMoney(r.cost) : 'Free'}</b>
+                  </span>
+                </span>
+                <b className="act-card-title">{r.def.label}</b>
+                <span className="act-card-tags">
+                  {r.def.kind === 'crime' && <i className="tag risky">🎲 Risky</i>}
+                  {tags.map((t) => <i key={t.label} className={`tag ${t.cls}`}>+{t.label}</i>)}
+                  {Object.keys(r.skillXp).length > 0 && <i className="tag skill">+Skill</i>}
+                </span>
+                {!r.ok && <small className="act-card-why">{r.reason}</small>}
+              </button>
+              <button className="act-card-info" onClick={() => { sfx('click'); setInfo(info === r.def.id ? null : r.def.id) }} aria-label={`Details: ${r.def.label}`}>i</button>
+            </div>
+          )
+        })}
+      </div>
+      {detail && (
+        <div className="act-detail-pop" role="dialog" aria-label={detail.def.label}>
+          <b>{detail.def.icon} {detail.def.label}</b>
+          <small>{detail.def.blurb}</small>
+          <div className="chips">
+            {describeEffects(detail).map((e, i) => <Chip key={i} tone={e.tone}>{e.label}</Chip>)}
+          </div>
+          <div className="row">
+            <Btn small disabled={!detail.ok} onClick={() => { start(detail); setInfo(null) }}>{detail.def.kind === 'work' ? 'Start shift' : 'Start'}</Btn>
+            <Btn small kind="ghost" onClick={() => setInfo(null)}>Close</Btn>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 

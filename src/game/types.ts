@@ -92,6 +92,10 @@ export interface Appearance {
   outfit: number
   outfitColor: number
   accessory: number
+  /** Build: slim, average, broad (older saves: average). */
+  body?: number
+  /** Facial hair: none, stubble, goatee, full beard. */
+  beard?: number
 }
 
 /** How you started life in Accra. */

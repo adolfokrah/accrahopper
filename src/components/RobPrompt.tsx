@@ -35,7 +35,7 @@ export function RobPrompt() {
   if (target === null) {
     if (activity) return null
     return (
-      <button className="rob-fab" title="Pick the nearest passer-by" onClick={() => {
+      <button className="rob-fab" title="Rob someone: picks the nearest passer-by" onClick={() => {
         sfx('click')
         const me = runtime.player
         let best = -1
@@ -47,7 +47,7 @@ export function RobPrompt() {
         })
         if (best < 0) useUI.getState().toast('Nobody close enough. Walk to a busier street.', 'warn')
         else useUI.setState({ robTarget: best })
-      }}>🫳 Rob someone</button>
+      }} aria-label="Rob someone">🫳</button>
     )
   }
   const ped = runtime.peds[target]

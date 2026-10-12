@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { DEFAULT_APPEARANCE, DEST_BY_ID, HOMES, NPCS } from '@/game/content'
 import { hourOf } from '@/game/config'
 import { findMyCharacter, walkToPoint } from '@/game/nav'
-import { camBasis, runtime, setZoom, turnCam, zoomBy } from '@/game/runtime'
+import { camBasis, runtime, setZoom, turnCam, zoomBy, defaultZoom } from '@/game/runtime'
 import { useGame } from '@/game/store'
 import { QUALITY_ORDER, QUALITY, useUI } from '@/game/ui'
 import { MAP_H, MAP_W } from '@/game/world'
@@ -552,7 +552,7 @@ export default function World3D({ onFail }: { onFail: () => void }) {
       shadows={quality.shadows}
       dpr={quality.dpr}
       gl={{ antialias: quality.antialias, powerPreference: 'high-performance' }}
-      camera={{ zoom: 36, near: -50, far: 400, position: [60, 50, 60] }}
+      camera={{ zoom: defaultZoom(), near: -50, far: 400, position: [60, 50, 60] }}
       onCreated={({ gl }) => {
         useUI.setState({ gfx: 'ok' })
         const el = gl.domElement

@@ -21,6 +21,7 @@ import {
   type Pt,
 } from '@/game/lanes'
 import type { Appearance } from '@/game/types'
+import { randomAppearance } from '@/game/content'
 import { Character } from './Character'
 import { GEO, Part, headlightMat, viewCenter } from './shared'
 import { Label } from './Label'
@@ -56,9 +57,7 @@ interface Ped {
 const COPS = 3
 const COP_LOOK: Appearance = { skin: 4, hair: 0, hairColor: 0, outfit: 1, outfitColor: 1, accessory: 2 }
 
-function randomLook(r: () => number): Appearance {
-  return { skin: Math.floor(r() * 6), hair: Math.floor(r() * 6), hairColor: Math.floor(r() * 6), outfit: Math.floor(r() * 4), outfitColor: Math.floor(r() * 7), accessory: r() < 0.7 ? 0 : Math.floor(r() * 6) }
-}
+const randomLook = (r: () => number): Appearance => randomAppearance(r)
 
 /** Random tile near the camera that satisfies `ok`. */
 function spawnNear(ok: (x: number, z: number) => boolean, min = SPAWN_MIN, max = SPAWN_MAX): { x: number; z: number } | null {

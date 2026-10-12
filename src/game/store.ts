@@ -77,7 +77,7 @@ import {
   SELL_BACK,
 } from './content'
 import { EXTENSIONS, autoPlace, canExtend, canPlace, extCount, homeRuntime, isBed, itemsInHome, type HomeStyleMap } from './home'
-import { cancelPath, runtime, teleport } from './runtime'
+import { cancelPath, defaultZoom, runtime, teleport } from './runtime'
 import { nearestJunction, roadRoute } from './world'
 import { plotValue } from './property'
 import { clockRef, useUI } from './ui'
@@ -1693,7 +1693,7 @@ export const useGame = create<GameState>((set, get) => ({
     const home = DEST_BY_ID[homeDestId(g)]
     g.player = { x: home.door.x + 0.5, z: home.door.z + 0.5, rot: 0 }
     teleport(g.player.x, g.player.z)
-    runtime.cam.zoom = 36
+    runtime.cam.zoom = defaultZoom()
     set({ ...g, screen: 'game', nearDest: home.id })
     useUI.setState({ panel: 'none', selectedDest: null, editMode: false, holdingUid: null, dialog: null, paused: false, trackedDest: null, toasts: [], inbox: [], unread: 0 })
     const where = AREA_BY_ID[home.area]?.name ?? 'Accra'
