@@ -1,4 +1,4 @@
-import { AREAS, DESTINATIONS, OX, OZ, ROAD_CLASS, STREET_GAP, STREET_START, STREET_W, areaAt, isInnerRoad, mapXf, streetSpan, unmapX, type AreaStyle, type RoadClass } from './content'
+import { AREAS, DESTINATIONS, LAGOON, OX, OZ, ROAD_CLASS, coastZ, STREET_GAP, STREET_START, STREET_W, areaAt, isInnerRoad, mapXf, streetSpan, unmapX, type AreaStyle, type RoadClass } from './content'
 import type { DistrictId } from './types'
 
 export const MAP_W = 240
@@ -8,9 +8,7 @@ export { STREET_W }
 export const G = { GRASS: 0, ROAD: 1, SIDEWALK: 2, PLAZA: 3, BOARDWALK: 4, SAND: 5, WATER: 6, DIRT: 7, FOREST: 8, CONCRETE: 9 } as const
 
 /** The Gulf of Guinea coastline (z of the waterline) at a given x (shape kept from the original layout). */
-const coastOld = (x: number) => 112 - 0.2 * x + 1.5 * Math.sin(x / 9)
-export const coastZ = (x: number) => mapXf(coastOld(unmapX(x)))
-const LAGOON = { x: mapXf(30), z: mapXf(89.5), r: 3.5 * (STREET_GAP / 12) }
+export { coastZ }
 const inLagoon = (x: number, z: number) => ((x - LAGOON.x) / LAGOON.r) ** 2 + ((z - LAGOON.z) / LAGOON.r) ** 2 < 1
 
 export const V_STREETS: number[] = []

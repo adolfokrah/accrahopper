@@ -3852,3 +3852,59 @@ button.ios-row:active {
 .gmap-modes b { font-size: 12px; }
 .gmap-modes small { font-size: 11px; color: #70757a; }
 .gmap-modes button:disabled { opacity: 0.45; }
+
+/* ---- goal / tutorial card lives at the bottom-left, where the eye already is ---- */
+.left-col {
+  top: auto;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  left: 10px;
+  width: 300px;
+  display: flex;
+  flex-direction: column-reverse;
+  z-index: 4;
+}
+/* not enough room beside the nav bar: sit just above it */
+@media (max-width: 1180px) {
+  .left-col {
+    bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+  /* an activity bar or result needs that space: go back to the top corner meanwhile */
+  .hud:has(.bottom-stack > *) .left-col {
+    bottom: auto;
+    top: calc(60px + env(safe-area-inset-top));
+  }
+}
+@media (max-width: 760px) {
+  .left-col {
+    top: auto;
+    bottom: calc(150px + env(safe-area-inset-bottom));
+    left: 8px;
+    width: min(300px, calc(100% - 64px));
+  }
+  /* activity bars and results take the bottom on phones */
+  .hud:has(.bottom-stack > *) .left-col {
+    display: none;
+  }
+}
+.objective.tutorial {
+  border: 2px solid var(--blue);
+  animation: obj-glow 2.4s ease-in-out infinite;
+}
+.objective.urgent {
+  border: 2px solid var(--red);
+}
+@keyframes obj-glow {
+  0%, 100% { box-shadow: 0 6px 18px rgba(46, 134, 222, 0.25); }
+  50% { box-shadow: 0 6px 26px rgba(46, 134, 222, 0.6); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .objective.tutorial { animation: none; }
+}
+.left-col { width: 330px; }
+.left-col .obj-head { padding: 11px 13px; }
+.left-col .obj-head b { font-size: 1.02rem; }
+.left-col .obj-tag { font-size: 0.72rem; padding: 3px 8px; }
+.left-col .obj-body { font-size: 0.92rem; padding: 0 13px 12px; }
+@media (max-width: 760px) {
+  .left-col { width: min(330px, calc(100% - 64px)); }
+}

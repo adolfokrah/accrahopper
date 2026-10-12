@@ -65,7 +65,7 @@ import {
   RENT_OUT,
   SELL_BACK,
 } from './content'
-import { EXTENSIONS, autoPlace, canExtend, canPlace, extCount, homeRuntime, type HomeStyleMap } from './home'
+import { EXTENSIONS, autoPlace, canExtend, canPlace, extCount, homeRuntime, isBed, itemsInHome, type HomeStyleMap } from './home'
 import { cancelPath, runtime, teleport } from './runtime'
 import { nearestJunction, roadRoute } from './world'
 import { plotValue } from './property'
@@ -649,6 +649,9 @@ function finishActivity(d: GameState) {
 
   // ---- rides arrive at the door, then go straight in
   if (a.ctx.ride && a.travelTo && !a.ctx.drive) {
+    const next = runtime.onRideEnd
+    runtime.onRideEnd = null
+    if (next) setTimeout(next, 600)
     const to = DEST_BY_ID[a.travelTo]
     if (a.meta?.note) lines.push(String(a.meta.note))
     if (a.ctx.ride === 'okada' && Math.random() < DRIVING.okadaRideRisk && !d.health.illness) {
@@ -786,13 +789,17 @@ function finishActivity(d: GameState) {
   } else if (fx === 'spray') {
     track(d, 'sprayed')
     lines.push('💸 Cedi notes rain over the dancers. Everyone is cheering your name.')
-  } else if (fx === 'hookup') {
+  } else if (fx === 'hookup' || fx === 'hookup_m') {
     const traits: string[] = d.profile?.traits ?? []
     let chance = 0.3 + (traits.includes('charming') ? 0.15 : 0) + Math.min(0.25, (d.today['sprayed'] ?? 0) * 0.15) + (d.needs.hygiene > 60 ? 0.1 : -0.2) + (d.needs.fun > 60 ? 0.05 : 0)
     if (d.romance.stage === 'married') chance -= 0.1
     if (Math.random() < chance) {
-      const name = HOOKUP_NAMES[Math.floor(Math.random() * HOOKUP_NAMES.length)]
-      d.hookup = { name, look: { skin: Math.floor(Math.random() * 6), hair: Math.floor(Math.random() * 6), hairColor: Math.floor(Math.random() * 6), outfit: Math.floor(Math.random() * 4), outfitColor: Math.floor(Math.random() * 7), accessory: Math.floor(Math.random() * 6) } }
+      const guy = fx === 'hookup_m'
+      const names = guy ? HOOKUP_GUYS : HOOKUP_GIRLS
+      const name = names[Math.floor(Math.random() * names.length)]
+      // short crop, afro or bald for guys; braids, top bun or headwrap for girls
+      const hairs = guy ? [0, 1, 3] : [2, 4, 5]
+      d.hookup = { name, look: { skin: Math.floor(Math.random() * 6), hair: hairs[Math.floor(Math.random() * hairs.length)], hairColor: Math.floor(Math.random() * 6), outfit: Math.floor(Math.random() * 4), outfitColor: Math.floor(Math.random() * 7), accessory: Math.floor(Math.random() * 6) } }
       d.event = { id: 'hookup_where', ctx: {} }
       lines.push(`😏 You and ${name} have chemistry.`)
     } else {
@@ -958,7 +965,8 @@ function hospitalize(d: GameState, why: string) {
 
 export const loanLimit = (s: Pick<GameState, 'credit'>) => Math.round((LOAN.baseLimit + s.credit * LOAN.perCredit) / 10) * 10
 
-const HOOKUP_NAMES = ['Akua', 'Kwabena', 'Adjoa', 'Yaw', 'Esi', 'Kojo', 'Afia', 'Nana', 'Selasi', 'Dzifa', 'Edem', 'Naa', 'Fiifi', 'Ekua']
+const HOOKUP_GIRLS = ['Akua', 'Adjoa', 'Esi', 'Afia', 'Dzifa', 'Naa', 'Ekua', 'Abla', 'Efia', 'Selasie']
+const HOOKUP_GUYS = ['Kwabena', 'Kojo', 'Kwame', 'Edem', 'Fiifi', 'Nii', 'Kweku', 'Selasi', 'Yaw Boakye', 'Ato']
 
 /** Shared consequences of a night together: protection, infection risk, and being found out. */
 function afterIntimacy(d: GameState, lines: string[], riskNoCondom: number) {
@@ -1698,9 +1706,11 @@ export const useGame = create<GameState>((set, get) => ({
             d.needs.social = clamp(d.needs.social - 5)
             lines.push('👵 Auntie Akosua raised an eyebrow as you walked in…')
           }
-        }
+        } else enterPlace(d, 'guesthouse_osu')
+        // at home you both end up on your bed
+        const bed = home ? itemsInHome(d.housing.tier, d.inventory).find((it) => isBed(it.type)) : undefined
         d.activity = {
-          uid: d.nextId++, defId: 'intimate', label: `Night with ${d.hookup.name}`, icon: '💞', kind: 'date', ctx: home ? {} : { dest: d.insideDest ?? undefined },
+          uid: d.nextId++, defId: 'intimate', label: `Night with ${d.hookup.name}`, icon: '💞', kind: 'date', ctx: home ? (bed ? { furnitureUid: bed.id } : {}) : { dest: 'guesthouse_osu' },
           total: 240, done: 0, scale: 60, needs: { fun: 40, social: 35, energy: -15, hygiene: -10 }, appliedFrac: 0,
           reward: 0, skillXp: {}, careerXp: 0, cost: 0, startedAt: d.minutes, effect: 'intimate',
         }
@@ -1958,6 +1968,12 @@ export const useGame = create<GameState>((set, get) => ({
     const to = DEST_BY_ID[destId]
     if (!to) return
     if (s.activity) return toast('Finish your current activity first', 'warn')
+    if (mode === 'trotro') {
+      // trotros only run between stations
+      const here = s.view === 'inside' ? s.insideDest : s.nearDest
+      if (!here || DEST_BY_ID[here]?.kind !== 'stop') return toast('Walk to a trotro station first', 'warn')
+      if (to.kind !== 'stop') return toast('Trotros only stop at stations', 'warn')
+    }
     const d = draft(s)
     if (d.view !== 'world') {
       const here = DEST_BY_ID[d.view === 'home' ? homeDestId(d) : d.insideDest ?? 'home_room']

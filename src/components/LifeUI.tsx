@@ -3,8 +3,8 @@ import { useState } from 'react'
 import { sfx } from '@/game/audio'
 import { dayOf, formatClock, formatDuration, formatMoney } from '@/game/config'
 import { DEST_BY_ID, ILLNESSES, LEGAL, RIDES, type RideMode } from '@/game/content'
-import { GOALS, TASK_BY_ID, rideQuote, taskProgress, walkMinutes } from '@/game/life'
-import { walkToDest } from '@/game/nav'
+import { GOALS, TASK_BY_ID, rideQuote, taskProgress, trotroPlan, walkMinutes } from '@/game/life'
+import { takeTrotro, walkToDest } from '@/game/nav'
 import { useGame } from '@/game/store'
 import { useUI } from '@/game/ui'
 import { Btn, Meter, Modal } from './kit'
@@ -16,7 +16,8 @@ export function TravelSheet() {
   if (!to) return null
   const d = DEST_BY_ID[to]
   const close = () => useUI.setState({ travelTo: null })
-  const modes: RideMode[] = ['okada', 'pragia', 'trotro', 'taxi', 'ride']
+  const modes: RideMode[] = ['okada', 'pragia', 'taxi', 'ride']
+  const tro = trotroPlan(s, to)
   return (
     <Modal label={`Travel to ${d.name}`}>
       <div className="travel-head">
@@ -32,6 +33,16 @@ export function TravelSheet() {
           <span className="t-main"><b>Walk</b><small>Free · exercise and fresh air</small></span>
           <span className="t-meta"><b>Free</b><small>~{formatDuration(walkMinutes(s, to))}</small></span>
         </button>
+        {tro && (
+          <button className="choice travel" disabled={s.money < tro.ride.fare || !!s.activity} onClick={() => { sfx('coin'); close(); takeTrotro(to) }}>
+            <span className="t-ico">🚐</span>
+            <span className="t-main">
+              <b>Trotro</b>
+              <small>{tro.walkTo ? `Walk ${tro.walkTo} min to ${DEST_BY_ID[tro.from].name}, ` : `From ${DEST_BY_ID[tro.from].name}, `}ride to {DEST_BY_ID[tro.to].name}{tro.walkFrom ? `, walk ${tro.walkFrom} min` : ''}</small>
+            </span>
+            <span className="t-meta"><b>{formatMoney(tro.ride.fare)}</b><small>~{formatDuration(tro.total)}</small></span>
+          </button>
+        )}
         {modes.map((m) => {
           const q = rideQuote(s, m, to)
           const cant = s.money < q.fare

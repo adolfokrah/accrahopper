@@ -4,8 +4,8 @@ import { sfx } from '@/game/audio'
 import { isOpen } from '@/game/activities'
 import { GAME_CONFIG, formatMoney, hourOf } from '@/game/config'
 import { AREA_BY_ID, DESTINATIONS, DEST_BY_ID, NPCS, RIDES, type RideMode } from '@/game/content'
-import { rideQuote, walkMinutes } from '@/game/life'
-import { walkToDest } from '@/game/nav'
+import { rideQuote, trotroPlan, walkMinutes } from '@/game/life'
+import { takeTrotro, walkToDest } from '@/game/nav'
 import { runtime } from '@/game/runtime'
 import { useGame } from '@/game/store'
 import { useUI } from '@/game/ui'
@@ -414,7 +414,15 @@ export function CityMap({ onBack }: { onBack: () => void }) {
               <button disabled={!!s.activity} onClick={() => { useUI.setState({ trackedDest: d.id, panel: 'none' }); walkToDest(d.id, true, true) }}>
                 🚶<b>{walkMinutes(s, d.id)} min</b><small>{fmtDist(Math.hypot(me.x - d.door.x, me.z - d.door.z))}</small>
               </button>
-              {(['trotro', 'okada', 'taxi', 'ride'] as RideMode[]).map((m) => {
+              {(() => {
+                const tro = trotroPlan({ player: me, minutes: s.minutes }, d.id)
+                return tro ? (
+                  <button disabled={!!s.activity || s.money < tro.ride.fare} title={`Walk to ${DEST_BY_ID[tro.from].name}, ride to ${DEST_BY_ID[tro.to].name}`} onClick={() => { sfx('coin'); takeTrotro(d.id) }}>
+                    🚐<b>{tro.total} min</b><small>{formatMoney(tro.ride.fare)}</small>
+                  </button>
+                ) : null
+              })()}
+              {(['okada', 'taxi', 'ride'] as RideMode[]).map((m) => {
                 const qt = rideQuote({ player: me, minutes: s.minutes }, m, d.id)
                 return (
                   <button key={m} disabled={!!s.activity || s.money < qt.fare} onClick={() => ride(m)}>

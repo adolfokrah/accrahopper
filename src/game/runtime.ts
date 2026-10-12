@@ -8,6 +8,8 @@ export const runtime = {
   path: [] as { x: number; z: number }[],
   marker: null as { x: number; z: number } | null,
   onArrive: null as null | (() => void),
+  /** Run once when the player's current ride drops them off (e.g. walk on from the trotro station). */
+  onRideEnd: null as null | (() => void),
   keys: { up: false, down: false, left: false, right: false },
   cam: {
     x: PLAYER_START.x, z: PLAYER_START.z, zoom: 36, follow: true, snap: true, yaw: Math.PI / 4, yawTarget: Math.PI / 4,

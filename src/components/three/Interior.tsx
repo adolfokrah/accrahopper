@@ -273,6 +273,7 @@ export function Interior({ visible }: { visible: boolean }) {
   const style = useGame((s) => (s.viewing ? undefined : s.homeStyle[s.housing.tier]))
   const inventory = useMemo(() => (viewing ? [] : ownInventory), [viewing, ownInventory])
   const activity = useGame((s) => s.activity)
+  const hookup = useGame((s) => s.hookup)
   const profile = useGame((s) => s.profile)
   const home = HOMES[tier]
   const lay = homeLayout(tier, ext)
@@ -605,6 +606,12 @@ export function Interior({ visible }: { visible: boolean }) {
 
       <group ref={player} position={[lay.door.x + 0.5, 0.12, lay.door.y + 0.3]}>
         <Character appearance={profile?.appearance ?? DEFAULT_APPEARANCE} getMotion={() => motion.current} />
+        {hookup && activity?.defId === 'intimate' && (
+          <group position={[0.5, 0, 0.05]}>
+            <Character appearance={hookup.look} getMotion={() => motion.current} />
+            <Label id="home-hookup" y={1.6} cls="npc-tag" text={`💞 ${hookup.name}`} />
+          </group>
+        )}
         {pctShown !== null && activity && <Label id="home-bubble" y={1.9} cls="bubble" text={`${activity.icon} ${pctShown}%`} />}
       </group>
     </group>

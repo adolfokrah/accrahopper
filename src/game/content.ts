@@ -243,6 +243,12 @@ function clearOfRoads(pos: { x: number; z: number; w: number; d: number }) {
   return { x, z, w: Math.max(2, w), d: Math.max(2, d) }
 }
 
+/** The Gulf of Guinea coastline (z of the waterline) at a given x (shape kept from the original layout). */
+const coastOld = (x: number) => 112 - 0.2 * x + 1.5 * Math.sin(x / 9)
+export const coastZ = (x: number) => mapXf(coastOld(unmapX(x)))
+/** Korle Lagoon. */
+export const LAGOON = { x: mapXf(30), z: mapXf(89.5), r: 3.5 * (STREET_GAP / 12) }
+
 /** Footprint whose door opens onto the sidewalk above the next street south.
  *  c/r are block columns/rows of the original city; the two outer rings (west/north) use negative indexes. */
 function at(c: number, r: number, w: number, d: number, xoff = 0) {
@@ -316,6 +322,7 @@ export const DESTINATIONS: Destination[] = [
   dest({ id: 'jamestown', name: 'Jamestown Lighthouse', kind: 'landmark', area: 'jamestown', emoji: '🗼', pos: at(2, 6, 3, 3, 2), color: '#ffffff', accent: '#d63a2f', hours: [5, 24], blurb: 'Old Accra: the lighthouse, Bukom boxing, the fish market and back alleys.', npcs: ['nii'] }),
   // Osu
   dest({ id: 'stadium', name: 'Accra Sports Stadium', kind: 'stadium', area: 'osu', emoji: '🏟️', pos: at(5, 5, 8, 8, 0), color: '#d9dde3', accent: '#ce1126', hours: [8, 23], blurb: 'Hearts of Oak, the Black Stars and five-a-side.' }),
+  dest({ id: 'guesthouse_osu', name: 'Osu Cosy Guest House', kind: 'hotel', area: 'osu', emoji: '🛏️', pos: at(5, 6, 5, 4, 1), color: '#f3e1c7', accent: '#8e5bd0', hours: [0, 24], blurb: 'Small, discreet rooms by the night. No questions asked.' }),
   dest({ id: 'club_osu', name: 'Oxford Street Lounge', kind: 'lounge', area: 'osu', emoji: '🍸', pos: at(6, 5, 6, 5, 0), color: '#2d2a4a', accent: '#ff2d95', hours: [16, 24], blurb: 'Osu nightlife on Oxford Street.' }),
   dest({ id: 'food_osu', name: 'Osu Night Market Chop Bar', kind: 'food', area: 'osu', emoji: '🍢', pos: at(6, 5, 4, 4, 6), color: '#ffd166', accent: '#e0524a', hours: [10, 24], blurb: 'Kebabs, kenkey and fried yam till late.' }),
   // Labadi
@@ -353,6 +360,64 @@ export const DESTINATIONS: Destination[] = [
   dest({ id: 'galamsey', name: 'Forest Gold Pits', kind: 'mine', area: 'achimota', emoji: '⛏️', pos: at(3, 0, 7, 6, 1), color: '#a0703c', accent: '#5c4033', hours: [5, 20], blurb: 'Illegal gold pits deep in the forest. Muddy, dangerous, lucrative.' }),
   dest({ id: 'harbour', name: 'Jamestown Harbour', kind: 'harbour', area: 'jamestown', emoji: '⚓', pos: at(2, 6, 4, 3, 6), color: '#8a6a3f', accent: '#2a9d8f', hours: [0, 24], blurb: 'Fishing canoes by day. Quiet deals by night.' }),
 ]
+
+/* ------------------------------ land for sale ------------------------------ */
+/** Land prices, growth and land-guard risk by kind of neighbourhood. */
+const LAND: Record<AreaStyle, { price: number; growth: number; guards: number; blurb: string }> = {
+  dense: { price: 3500, growth: 0.005, guards: 0.3, blurb: 'Cheap land in a busy, crowded area.' },
+  coastal: { price: 5000, growth: 0.007, guards: 0.55, blurb: 'Near the sea. Land guards are common here.' },
+  upscale: { price: 16000, growth: 0.011, guards: 0.35, blurb: 'Leafy, gated and expensive.' },
+  business: { price: 20000, growth: 0.012, guards: 0.2, blurb: 'Prime commercial land. Perfect for a plaza.' },
+  campus: { price: 9000, growth: 0.008, guards: 0.2, blurb: 'Quiet land near the universities.' },
+  forest: { price: 4500, growth: 0.006, guards: 0.25, blurb: 'Green and peaceful, a little far out.' },
+  industrial: { price: 6500, growth: 0.006, guards: 0.3, blurb: 'Good value near the factories and the harbour.' },
+}
+const PLOTS_PER_AREA = 4
+const hash01 = (a: number, b: number, c: number) => {
+  const n = Math.sin(a * 127.1 + b * 311.7 + c * 74.7) * 43758.5453
+  return n - Math.floor(n)
+}
+/** Extra building plots: a few 3x5 lots in empty spots of every neighbourhood (same every game). */
+const GEN_PLOTS: { dest: Destination; price: number; growth: number; guardRisk: number }[] = []
+{
+  const taken = DESTINATIONS.map((d) => ({ x: d.x - 1, z: d.z - 1, w: d.w + 2, d: d.d + 2 }))
+  const hits = (x: number, z: number, w: number, d: number) => taken.some((t) => x < t.x + t.w && x + w > t.x && z < t.z + t.d && z + d > t.z)
+  const byArea: Record<string, { c: number; r: number; xoff: number; key: number }[]> = {}
+  for (let c = -2; c <= 13; c++)
+    for (let r = -2; r <= 9; r++)
+      for (const xoff of [0, 3, 6]) {
+        const p = at(c, r, 3, 5, xoff)
+        if (p.x < 1 || p.z < 1 || p.x + p.w > 236 || p.z + p.d > 168) continue
+        const safe = clearOfRoads(p)
+        if (safe.x !== p.x || safe.z !== p.z || safe.w !== p.w || safe.d !== p.d) continue
+        // dry land with room for a beach between the plot and the sea
+        if ([p.x, p.x + p.w].some((x) => p.z + p.d + 5 > coastZ(x))) continue
+        if (Math.hypot(p.x + 1.5 - LAGOON.x, p.z + 2.5 - LAGOON.z) < LAGOON.r * 1.8 + 4) continue
+        const area = areaAt(p.x + 1.5, p.z + 2.5)
+        ;(byArea[area.id] ??= []).push({ c, r, xoff, key: hash01(c, r, xoff) })
+      }
+  let n = 1
+  for (const area of AREAS) {
+    const slots = (byArea[area.id] ?? []).sort((a, b) => a.key - b.key)
+    const usedBlocks = new Set<string>()
+    let made = 0
+    for (const sl of slots) {
+      if (made >= PLOTS_PER_AREA) break
+      if (usedBlocks.has(`${sl.c},${sl.r}`)) continue
+      const p = at(sl.c, sl.r, 3, 5, sl.xoff)
+      if (hits(p.x, p.z, p.w, p.d)) continue
+      const L = LAND[area.style]
+      const vary = 0.85 + hash01(sl.r, sl.c, 7) * 0.35
+      const d = dest({ id: `plot_${area.id}_${sl.c}_${sl.r}_${sl.xoff}`, name: `Plot ${n * 7 + 3}, ${area.name}`, kind: 'plot', area: area.id, emoji: '🏗️', pos: p, color: '#c9a27a', accent: '#8a5a2b', hours: [0, 24], blurb: L.blurb, homeTier: 'house' })
+      DESTINATIONS.push(d)
+      taken.push({ x: p.x - 1, z: p.z - 1, w: p.w + 2, d: p.d + 2 })
+      GEN_PLOTS.push({ dest: d, price: Math.round((L.price * vary) / 100) * 100, growth: L.growth, guardRisk: L.guards })
+      usedBlocks.add(`${sl.c},${sl.r}`)
+      made++
+      n++
+    }
+  }
+}
 export const DEST_BY_ID: Record<string, Destination> = Object.fromEntries(DESTINATIONS.map((d) => [d.id, d]))
 export const HOME_DEST: Record<HomeTier, string> = { room: 'home_room', apartment: 'apartment', premium: 'home_premium', house: 'plot_dansoman' }
 /** The destination you live at (houses live on the plot you built on). */
@@ -548,6 +613,54 @@ export const CAREERS: Record<CareerId, CareerDef> = {
       { title: 'Barback', pay: 120, minutes: 240, careerXp: 40, promoteAt: 0, requires: {} },
       { title: 'Bartender', pay: 180, minutes: 240, careerXp: 50, promoteAt: 200, requires: { communication: 1 } },
       { title: 'Bar Manager', pay: 280, minutes: 300, careerXp: 60, promoteAt: 600, requires: { communication: 3 } },
+    ],
+  },
+  dj: {
+    id: 'dj', name: 'Club DJ', emoji: '🎧', workplace: 'club_osu', skill: 'communication', skillXpPerShift: 7,
+    blurb: 'Spin Afrobeats and amapiano at Oxford Street Lounge. Shout-outs earn tips.',
+    shiftNeeds: { energy: -22, hunger: -10, hygiene: -6, bladder: -8, fun: 14, social: 8 },
+    tasks: [
+      T('mix', 'Mix the next track', '🎚️', 'dance', { at: 'dj' }),
+      T('hype', 'Hype the crowd on the mic', '🎤', 'sing', { prop: 'mic', at: 'dj', tip: [3, 15] }),
+      T('request', 'Play a request', '📱', 'phone', { prop: 'phone', at: 'dj', tip: [5, 20] }),
+      T('shoutout', 'Birthday shout-out', '🎉', 'cheer', { at: 'dj', tip: [10, 30] }),
+    ],
+    levels: [
+      { title: 'Warm-up DJ', pay: 130, minutes: 240, careerXp: 40, promoteAt: 0, requires: {} },
+      { title: 'Resident DJ', pay: 220, minutes: 240, careerXp: 50, promoteAt: 220, requires: { communication: 2 } },
+      { title: 'Headline DJ', pay: 380, minutes: 300, careerXp: 60, promoteAt: 650, requires: { communication: 4 } },
+    ],
+  },
+  clubdoor: {
+    id: 'clubdoor', name: 'Club Bouncer', emoji: '🕶️', workplace: 'club_osu', skill: 'fitness', skillXpPerShift: 9,
+    blurb: 'Work the door at Oxford Street Lounge. Check IDs, keep trouble outside.',
+    shiftNeeds: { energy: -24, hunger: -14, hygiene: -6, bladder: -8, fun: 2, social: 6 },
+    tasks: [
+      T('id', 'Check IDs at the door', '🪪', 'talk', { at: 'door' }),
+      T('list', 'Let in the VIP list', '📋', 'wave', { at: 'door', tip: [5, 15] }),
+      T('fight', 'Break up a fight', '💪', 'box', { at: 'social' }),
+      T('patrol', 'Walk the floor', '👀', 'talk', { wander: true }),
+    ],
+    levels: [
+      { title: 'Door Staff', pay: 130, minutes: 240, careerXp: 40, promoteAt: 0, requires: {} },
+      { title: 'Head of Door', pay: 200, minutes: 240, careerXp: 50, promoteAt: 220, requires: { fitness: 2 } },
+      { title: 'Security Manager', pay: 300, minutes: 300, careerXp: 60, promoteAt: 650, requires: { fitness: 4, communication: 2 } },
+    ],
+  },
+  clubwaiter: {
+    id: 'clubwaiter', name: 'Club Waiter', emoji: '🍾', workplace: 'lounge', skill: 'communication', skillXpPerShift: 5,
+    blurb: 'Bottle service at Labadi Beach Club. Sparklers, VIP tables and big tips.',
+    shiftNeeds: { energy: -22, hunger: -12, hygiene: -8, bladder: -10, fun: 4, social: 10 },
+    tasks: [
+      T('order', 'Take a table order', '📝', 'talk', { at: 'mocktail' }),
+      T('bottle', 'Bottle service with sparklers', '🍾', 'carry', { prop: 'drink', at: 'social', tip: [8, 25] }),
+      T('clear', 'Clear empty glasses', '🥂', 'carry', { prop: 'box', wander: true }),
+      T('tab', 'Settle a tab', '💳', 'cashier', { at: 'bar', tip: [2, 10] }),
+    ],
+    levels: [
+      { title: 'Runner', pay: 100, minutes: 240, careerXp: 40, promoteAt: 0, requires: {} },
+      { title: 'VIP Waiter', pay: 160, minutes: 240, careerXp: 50, promoteAt: 200, requires: { communication: 1 } },
+      { title: 'Floor Captain', pay: 240, minutes: 300, careerXp: 60, promoteAt: 600, requires: { communication: 3 } },
     ],
   },
   hotel: {
@@ -837,6 +950,7 @@ export const PLOTS: PlotDef[] = [
   { id: 'plot_teshie', price: 6000, growth: 0.007, guardRisk: 0.6 },
   { id: 'plot_eastlegon', price: 14000, growth: 0.01, guardRisk: 0.6 },
   { id: 'plot_trassaco', price: 25000, growth: 0.012, guardRisk: 0.3 },
+  ...GEN_PLOTS.map((g) => ({ id: g.dest.id, price: g.price, growth: g.growth, guardRisk: g.guardRisk })),
 ]
 export const PLOT_BY_ID: Record<string, PlotDef> = Object.fromEntries(PLOTS.map((p) => [p.id, p]))
 export const PERMIT = { fee: 1500, days: 2, bribe: 700, bribeChance: 0.75, noPermitRisk: 0.35, demolitionFine: 2000 }
@@ -981,6 +1095,10 @@ export const RIDES: Record<RideMode, { name: string; emoji: string; blurb: strin
 const A = (a: ActivityDef): ActivityDef => a
 
 export const DEST_ACTIVITIES: Record<string, ActivityDef[]> = {
+  guesthouse_osu: [
+    A({ id: 'hotelnight', label: 'Rent a room for the night', blurb: 'Clean sheets, a fan and a lock on the door.', icon: '🛏️', kind: 'sleep', minutes: 480, cost: 120, needs: { energy: 90, hygiene: 20, hunger: -12 }, timeScale: 'sleep' }),
+    A({ id: 'gh_shower', label: 'Freshen up', blurb: 'Hot shower down the hall.', icon: '🚿', kind: 'generic', minutes: 20, cost: 15, needs: { hygiene: 60 } }),
+  ],
   foodstall: [
     A({ id: 'waakye', label: 'Waakye with egg & wele', blurb: 'Rice and beans, shito, gari, spaghetti. The full works.', icon: '🍛', kind: 'meal', minutes: 30, cost: 35, needs: { hunger: 50, fun: 6, bladder: -4 } }),
     A({ id: 'banku', label: 'Banku & grilled tilapia', blurb: 'With hot pepper and onions.', icon: '🐟', kind: 'meal', minutes: 35, cost: 45, needs: { hunger: 56, fun: 9, bladder: -4 } }),
@@ -1015,7 +1133,8 @@ export const DEST_ACTIVITIES: Record<string, ActivityDef[]> = {
     A({ id: 'hangout', label: 'Dance to Afrobeats', blurb: 'Hit the dance floor.', icon: '💃', kind: 'social', minutes: 90, cost: 40, needs: { fun: 25, social: 20, bladder: -6 }, hours: [12, 24] }),
     A({ id: 'mocktail', label: 'Drinks at the bar', blurb: 'Sobolo mocktail and a catch-up.', icon: '🍹', kind: 'social', minutes: 60, cost: 25, needs: { fun: 14, social: 10, bladder: -8 }, hours: [12, 24] }),
     A({ id: 'spray', label: 'Spray money on the dance floor', blurb: 'Make it rain cedis. The crowd loves you, and people notice.', icon: '💸', kind: 'social', minutes: 30, cost: 100, needs: { fun: 30, social: 25 }, effect: 'spray', hours: [18, 24] }),
-    A({ id: 'hookup', label: 'Look for a hook-up', blurb: '18+. Chat someone up and see where the night goes.', icon: '😏', kind: 'social', minutes: 45, needs: { social: 10, fun: 6 }, effect: 'hookup', require: 'mature', hours: [20, 24], dailyLimit: 2 }),
+    A({ id: 'hookup_m', label: 'Chat up a guy', blurb: '18+. Find a man on the dance floor and see where the night goes.', icon: '😏', kind: 'social', minutes: 45, needs: { social: 10, fun: 6 }, effect: 'hookup_m', require: 'mature', hours: [20, 24], dailyLimit: 2 }),
+    A({ id: 'hookup', label: 'Chat up a girl', blurb: '18+. Find a woman on the dance floor and see where the night goes.', icon: '😏', kind: 'social', minutes: 45, needs: { social: 10, fun: 6 }, effect: 'hookup', require: 'mature', hours: [20, 24], dailyLimit: 2 }),
     A({ id: 'nightwork', label: 'Night work (ashawo)', blurb: '18+. Illegal in Ghana: risk of police raids, robbery and infection.', icon: '🌙', kind: 'generic', minutes: 180, needs: { energy: -20, social: 5, hygiene: -15 }, effect: 'nightwork', require: 'mature', hours: [20, 24], dailyLimit: 1 }),
     A({ id: 'livemusic', label: 'Live highlife night', blurb: 'Live band and DJ. Evenings only.', icon: '🎷', kind: 'social', minutes: 120, cost: 60, needs: { fun: 35, social: 25, energy: -6, bladder: -8 }, hours: [18, 24] }),
   ],
@@ -1482,7 +1601,7 @@ export const EVENTS: Record<string, GameEventDef> = {
     body: 'You hit it off on the dance floor. They lean in: “So… your place or a guest house?”',
     choices: [
       { label: 'Take them home', hint: 'Free. Your landlady (or partner) might notice.', effect: { text: 'You catch an Uber home together.', custom: 'hook_home' } },
-      { label: 'Guest house in Osu (GH₵80)', hint: 'Discreet. Paid for the night.', cost: 80, effect: { text: 'You book a room at a small guest house.', custom: 'hook_guest', money: -80 } },
+      { label: 'Osu Cosy Guest House (GH₵80)', hint: 'Taxi there together. A private room for the night.', cost: 80, effect: { text: 'You take a taxi to Osu Cosy Guest House and book a room.', custom: 'hook_guest', money: -80 } },
       { label: 'Just swap numbers', hint: 'Social +10. Keep it friendly.', effect: { text: 'You swap numbers and promise to call.', needs: { social: 10 } } },
     ],
   },

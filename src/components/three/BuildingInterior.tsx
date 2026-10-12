@@ -440,7 +440,7 @@ const LAYOUTS: Partial<Record<DestKind, Layout>> = {
   },
   lounge: {
     w: 12, d: 10, floor: ['#2a2145', '#33295a'], wall: '#463a78', dark: true,
-    spots: { idle: { x: 6, z: 9.2 }, social: { x: 6, z: 5.6, pose: 'dance' }, mocktail: { x: 10.0, z: 4.5, rot: PI / 2, pose: 'sit' }, bar: { x: 11.4, z: 3.2, rot: -PI / 2, pose: 'cashier' } },
+    spots: { idle: { x: 6, z: 9.2 }, social: { x: 6, z: 5.6, pose: 'dance' }, mocktail: { x: 10.0, z: 4.5, rot: PI / 2, pose: 'sit' }, bar: { x: 11.4, z: 3.2, rot: -PI / 2, pose: 'cashier' }, dj: { x: 6.8, z: 1.4, rot: 0, pose: 'dance' }, door: { x: 6, z: 9.3, rot: PI, pose: 'talk' } },
     staff: { x: 11.35, z: 4.5, rot: -PI / 2, pose: 'work' },
     crowd: [{ x: 4.6, z: 4.4, rot: 0.6, pose: 'dance' }, { x: 7.6, z: 6.6, rot: -0.7, pose: 'dance' }, { x: 5, z: 7, rot: 2.2, pose: 'dance' }, { x: 8, z: 4.2, rot: 3, pose: 'dance' }, { x: 10, z: 3.0, rot: PI / 2, pose: 'sit' }, { x: 6, z: 1.0, pose: 'dance', prop: 'mic' }],
     Props: () => (
@@ -977,6 +977,7 @@ function spotFor(layout: Layout, a: ActiveActivity | null): Spot {
   const s = layout.spots
   if (a.kind === 'custody' || a.kind === 'jail') return s.cell ?? s.idle
   if (a.kind === 'hospital') return s.ward ?? s.idle
+  if (a.defId === 'intimate') return s.hotelnight ?? s.date ?? s.idle
   if (a.kind === 'date') return s.date ?? s.social ?? s.eat ?? s.idle
   if (a.kind === 'crime') return s.pickpocket ?? s.idle
   if (a.kind === 'work') {
@@ -1017,6 +1018,7 @@ function Room({ destId, layout }: { destId: string; layout: Layout }) {
   const dest = DEST_BY_ID[destId]
   const activity = useGame((s) => (s.activity && s.activity.ctx.dest === destId ? s.activity : null))
   const profile = useGame((s) => s.profile)
+  const hookup = useGame((s) => s.hookup)
   const dialog = useUI((s) => s.dialog)
   const { w, d, Props } = layout
   const player = useRef<THREE.Group>(null)
@@ -1196,6 +1198,12 @@ function Room({ destId, layout }: { destId: string; layout: Layout }) {
       )}
       <group ref={player}>
         <Character appearance={profile?.appearance ?? DEFAULT_APPEARANCE} getMotion={() => motion.current} />
+        {hookup && activity?.defId === 'intimate' && (
+          <group position={[0.5, 0, 0.05]}>
+            <Character appearance={hookup.look} getMotion={() => motion.current} />
+            <Label id="inside-hookup" y={1.6} cls="npc-tag" text={`💞 ${hookup.name}`} />
+          </group>
+        )}
         <Label id="inside-you" y={1.85} cls={wage ? 'bubble wage' : 'you-tag'} text={activity ? (activity.shift ? (activity.shift.current ? `${activity.shift.current.icon} ${activity.shift.current.label}` : `💼 ${wage ? `+${formatMoney(wage)}` : 'On shift'}`) : `${activity.icon} ${pct}%`) : profile?.name ?? 'You'} />
       </group>
     </group>

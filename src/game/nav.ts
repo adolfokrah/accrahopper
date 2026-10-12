@@ -1,4 +1,5 @@
 import { DEST_BY_ID, OUTDOOR_KINDS, homeDestId } from './content'
+import { trotroPlan } from './life'
 import { goToTile, runtime } from './runtime'
 import { useGame } from './store'
 import { useUI } from './ui'
@@ -28,7 +29,7 @@ export function tilesTo(id: string): number {
 }
 
 /** Walk to a destination door, then go inside (or open its panel). Far trips offer transport first. */
-export function walkToDest(id: string, enter = true, walkOnly = false) {
+export function walkToDest(id: string, enter = true, walkOnly = false, onArrive?: () => void) {
   let s = useGame.getState()
   const d = DEST_BY_ID[id]
   if (!d) return
@@ -48,12 +49,33 @@ export function walkToDest(id: string, enter = true, walkOnly = false) {
   if (s.view !== 'world') return
   const arrive = () => {
     useGame.getState().syncPlayer()
-    if (enter) enterHere(id)
+    if (onArrive) onArrive()
+    else if (enter) enterHere(id)
     else useUI.getState().selectDest(id, true)
   }
   if (s.nearDest === id) return arrive()
   const ok = goToTile(d.door.x, d.door.z, arrive)
   if (!ok) useUI.getState().toast('No route found', 'bad')
+}
+
+/** Go somewhere by trotro: walk to the nearest station, ride to the one nearest the destination, walk the rest. */
+export function takeTrotro(destId: string) {
+  const s = useGame.getState()
+  const toast = useUI.getState().toast
+  if (s.activity) return toast('Finish your current activity first', 'warn')
+  const plan = trotroPlan(s, destId)
+  if (!plan) return toast('No trotro goes there from here. Walk or take a taxi.', 'info')
+  if (s.money < plan.ride.fare) return toast(`The trotro fare is ${plan.ride.fare} cedis`, 'warn')
+  useUI.setState({ travelTo: null, trackedDest: destId, panel: 'none' })
+  const board = () => {
+    runtime.onRideEnd = plan.to === destId ? null : () => walkToDest(destId, true, true)
+    useGame.getState().startRide('trotro', plan.to)
+    if (useGame.getState().activity?.defId !== 'ride:trotro') runtime.onRideEnd = null
+  }
+  const here = s.view === 'inside' ? s.insideDest : s.nearDest
+  if (here === plan.from) return board()
+  toast(`🚶 Walking to ${DEST_BY_ID[plan.from].name} to catch a trotro`, 'info')
+  walkToDest(plan.from, false, true, board)
 }
 
 export function walkToPoint(x: number, z: number) {

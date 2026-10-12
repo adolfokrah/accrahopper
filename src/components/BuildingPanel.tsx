@@ -17,6 +17,7 @@ import { BALANCE, formatDuration, formatMoney, hourOf } from '@/game/config'
 import { plotValue } from '@/game/property'
 import { rideQuote } from '@/game/life'
 import {
+  AREAS,
   AREA_BY_ID,
   PLOTS,
   VEHICLES,
@@ -244,23 +245,7 @@ function RealtyCard() {
           </div>
         )
       })}
-      <b>🗺️ Land for sale</b>
-      {PLOTS.map((p) => {
-        const d = DEST_BY_ID[p.id]
-        const st = s.plots[p.id]
-        const value = plotValue(s, p.id)
-        return (
-          <div key={p.id} className="card-inner">
-            <div className="row between"><b>{d.name}</b>{st?.owned ? <Chip tone="plus">Owned</Chip> : <Chip tone="gold">{formatMoney(value)}</Chip>}</div>
-            <small className="muted">{AREA_BY_ID[d.area].name} · grows ~{(p.growth * 100).toFixed(1)}%/day · land-guard risk {p.guardRisk >= 0.5 ? 'high' : p.guardRisk >= 0.3 ? 'medium' : 'low'}</small>
-            <div className="row">
-              {!st?.owned && <Btn small disabled={!near || s.money < value} onClick={() => { useGame.getState().buyPlot(p.id); sfx('success') }}>Buy {formatMoney(value)}</Btn>}
-              {st?.owned && <Btn small kind="soft" onClick={() => useGame.getState().sellPlot(p.id)}>Sell for {formatMoney(value)}</Btn>}
-              <Btn small kind="ghost" onClick={() => walkToDest(p.id)}>📍 Visit</Btn>
-            </div>
-          </div>
-        )
-      })}
+      <LandForSale near={near} />
       {(['apartment', 'premium'] as const).map((t) => {
         const h = HOMES[t]
         const owned = s.owned.includes(t)
@@ -382,6 +367,49 @@ export function RentOutBtn({ k }: { k: string }) {
     <Btn small kind={let_ ? 'ghost' : 'soft'} onClick={() => { sfx(let_ ? 'click' : 'coin'); useGame.getState().toggleRentOut(k) }}>
       {let_ ? `🔑 Rented out · ${range}/day · end lease` : `🏠 Rent it out · ${range}/day`}
     </Btn>
+  )
+}
+
+/** Land listings with a neighbourhood filter (there is a plot or more in every part of the city). */
+function LandForSale({ near }: { near: boolean }) {
+  const s = useGame()
+  const [area, setArea] = useState('')
+  const [sort, setSort] = useState<'price' | 'growth'>('price')
+  const [all, setAll] = useState(false)
+  const areas = AREAS.filter((a) => PLOTS.some((p) => DEST_BY_ID[p.id].area === a.id))
+  const list = PLOTS.filter((p) => !area || DEST_BY_ID[p.id].area === area)
+    .map((p) => ({ p, value: plotValue(s, p.id), st: s.plots[p.id] }))
+    .sort((a, b) => Number(!!b.st?.owned) - Number(!!a.st?.owned) || (sort === 'price' ? a.value - b.value : b.p.growth - a.p.growth))
+  const shown = all ? list : list.slice(0, 8)
+  return (
+    <>
+      <b>🗺️ Land for sale ({PLOTS.filter((p) => !s.plots[p.id]?.owned).length} plots)</b>
+      <div className="row">
+        <select value={area} onChange={(e) => { setArea(e.target.value); setAll(false) }} aria-label="Neighbourhood">
+          <option value="">All neighbourhoods</option>
+          {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+        <select value={sort} onChange={(e) => setSort(e.target.value as 'price' | 'growth')} aria-label="Sort">
+          <option value="price">Cheapest first</option>
+          <option value="growth">Fastest growing</option>
+        </select>
+      </div>
+      {shown.map(({ p, value, st }) => {
+        const d = DEST_BY_ID[p.id]
+        return (
+          <div key={p.id} className="card-inner">
+            <div className="row between"><b>{d.name}</b>{st?.owned ? <Chip tone="plus">Owned</Chip> : <Chip tone="gold">{formatMoney(value)}</Chip>}</div>
+            <small className="muted">{AREA_BY_ID[d.area].name} · {d.blurb} Grows ~{(p.growth * 100).toFixed(1)}%/day · land-guard risk {p.guardRisk >= 0.5 ? 'high' : p.guardRisk >= 0.3 ? 'medium' : 'low'}</small>
+            <div className="row">
+              {!st?.owned && <Btn small disabled={!near || s.money < value} onClick={() => { useGame.getState().buyPlot(p.id); sfx('success') }}>Buy {formatMoney(value)}</Btn>}
+              {st?.owned && <Btn small kind="soft" onClick={() => useGame.getState().sellPlot(p.id)}>Sell for {formatMoney(value)}</Btn>}
+              <Btn small kind="ghost" onClick={() => walkToDest(p.id)}>📍 Visit</Btn>
+            </div>
+          </div>
+        )
+      })}
+      {!all && list.length > shown.length && <Btn small kind="ghost" onClick={() => setAll(true)}>Show all {list.length} plots</Btn>}
+    </>
   )
 }
 

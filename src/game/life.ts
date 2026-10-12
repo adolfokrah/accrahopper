@@ -1,5 +1,5 @@
 import { formatMoney, hourOf } from './config'
-import { DEST_BY_ID, KM_PER_TILE, RIDES, type RideMode } from './content'
+import { DESTINATIONS, DEST_BY_ID, KM_PER_TILE, RIDES, type RideMode } from './content'
 import type { GameState } from './store'
 
 export const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -112,5 +112,41 @@ export function rideQuote(s: Pick<GameState, 'player' | 'minutes'>, mode: RideMo
 export const walkMinutes = (s: Pick<GameState, 'player'>, destId: string) => {
   const d = DEST_BY_ID[destId]
   return Math.max(1, Math.round(Math.hypot(s.player.x - d.door.x, s.player.z - d.door.z) * 1.25 / 3.8))
+}
+
+/** Nearest trotro station to a point. */
+export function nearestStop(x: number, z: number): string {
+  let best = ''
+  let bd = Infinity
+  for (const d of DESTINATIONS) {
+    if (d.kind !== 'stop') continue
+    const dist = Math.hypot(d.door.x - x, d.door.z - z)
+    if (dist < bd) { bd = dist; best = d.id }
+  }
+  return best
+}
+export interface TrotroPlan {
+  /** Station you board at and the one you get off at. */
+  from: string
+  to: string
+  /** Minutes on foot to the first station and from the last one to the destination. */
+  walkTo: number
+  walkFrom: number
+  ride: RideQuote
+  total: number
+}
+/** Trotros only run between stations: walk to the nearest one, ride to the station nearest the destination, walk the rest. */
+export function trotroPlan(s: Pick<GameState, 'player' | 'minutes'>, destId: string): TrotroPlan | null {
+  const d = DEST_BY_ID[destId]
+  if (!d) return null
+  const from = nearestStop(s.player.x, s.player.z)
+  const to = d.kind === 'stop' ? destId : nearestStop(d.door.x, d.door.z)
+  if (!from || !to || from === to) return null
+  const fromDoor = DEST_BY_ID[from].door
+  const toDoor = DEST_BY_ID[to].door
+  const walkTo = Math.hypot(s.player.x - fromDoor.x, s.player.z - fromDoor.z) < 2 ? 0 : walkMinutes(s, from)
+  const walkFrom = to === destId ? 0 : walkMinutes({ player: { x: toDoor.x, z: toDoor.z, rot: 0 } }, destId)
+  const ride = rideQuote({ player: { x: fromDoor.x, z: fromDoor.z, rot: 0 }, minutes: s.minutes }, 'trotro', to)
+  return { from, to, walkTo, walkFrom, ride, total: walkTo + ride.minutes + walkFrom }
 }
 export { formatMoney }
