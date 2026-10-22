@@ -23,6 +23,9 @@ export const EMOTES = [
   { emoji: '🤝🏾', verb: 'greeted', label: 'Greet' },
 ] as const
 
+/** Phone Chat thread id for talking out loud to players around you. */
+export const NEARBY_THREAD = '__nearby__'
+
 /** How far (tiles) a spoken line or emote carries. */
 export const HEARING_RANGE = 25
 const BUBBLE_MS = 6000
@@ -37,7 +40,7 @@ interface SocialState {
   unread: number
   friends: Friend[]
   threads: Record<string, DM[]>
-  /** Players panel: card or DM thread open (account ids). */
+  /** Player card open (account id), and the player chat open in the phone's Chat app (or NEARBY_THREAD). */
   card: string | null
   thread: string | null
   muted: string[]
@@ -111,7 +114,8 @@ function onInbox(msg: Ably.InboundMessage) {
   if (msg.name === 'dm') {
     const dm = data as unknown as DM & { name: string }
     if (useSocial.getState().muted.includes(dm.from_user)) return
-    const open = useSocial.getState().thread === dm.from_user && useUI.getState().panel === 'players'
+    const ui = useUI.getState()
+    const open = useSocial.getState().thread === dm.from_user && ui.panel === 'phone' && ui.phoneTab === 'chat'
     useSocial.setState((s) => ({ threads: s.threads[dm.from_user] ? { ...s.threads, [dm.from_user]: [...s.threads[dm.from_user], dm] } : s.threads }))
     if (open) void openThread(dm.from_user)
     else {
@@ -121,7 +125,7 @@ function onInbox(msg: Ably.InboundMessage) {
   } else if (msg.name === 'momo') {
     void claimMomo()
   } else if (msg.name === 'friend-request') {
-    toast(`🤝🏾 ${String(data.name)} wants to be friends. Open 👥 Players to accept.`, 'good')
+    toast(`🤝🏾 ${String(data.name)} wants to be friends. Accept in 📱 Contacts.`, 'good')
     void loadFriends()
   } else if (msg.name === 'friend-accepted') {
     toast(`🎉 You and ${String(data.name)} are now friends`, 'good')
@@ -202,8 +206,14 @@ export async function loadConversations() {
   if (r.conversations) useSocial.setState({ conversations: r.conversations, unread: r.conversations.reduce((n, c) => n + c.unread, 0) })
 }
 
-export async function openThread(id: string) {
+/** Opens the phone's Chat app on a conversation with this player. */
+export function chatWith(id: string) {
   useSocial.setState({ thread: id, card: null })
+  useUI.setState({ panel: 'phone', phoneTab: 'chat' })
+}
+
+/** Loads a player chat thread (marks it read). */
+export async function openThread(id: string) {
   const r = await api<{ messages: DM[] }>(`/api/dm?with=${encodeURIComponent(id)}`)
   if (r.messages) useSocial.setState((s) => ({ threads: { ...s.threads, [id]: r.messages } }))
   void loadConversations()

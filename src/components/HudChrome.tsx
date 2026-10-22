@@ -49,7 +49,7 @@ export function moodOf(needs: Record<NeedId, number>): { emoji: string; label: s
 /** 1234 -> "1.2k", 53_300_000 -> "53.3m". */
 const compact = (n: number) => (n < 1000 ? String(n) : n < 1e6 ? `${+(n / 1e3).toFixed(1)}k` : `${+(n / 1e6).toFixed(1)}m`)
 
-/** Who's around: everyone who has ever joined, and players online now. Opens the Players panel. */
+/** Players who have ever joined and players online now. Opens the phone's Chat app. */
 function PlayersPill() {
   const online = useRemoteIds((s) => s.ids.length)
   const live = useAccount((s) => s.live)
@@ -61,7 +61,7 @@ function PlayersPill() {
     return () => clearInterval(id)
   }, [])
   return (
-    <button className="hb-players" onClick={() => { sfx('click'); useSocial.setState({ card: null, thread: null }); useUI.getState().setPanel('players') }}
+    <button className="hb-players" onClick={() => { sfx('click'); useSocial.setState({ card: null, thread: null }); useUI.setState({ panel: 'phone', phoneTab: 'chat' }) }}
       aria-label={`Players: ${players ?? 'unknown'} joined${live ? `, ${online + 1} online` : ''}${badge ? `, ${badge} new` : ''}`}>
       <span className="hb-joined"><span aria-hidden>👀</span>{players === null ? '…' : compact(players)}</span>
       {live && <span className="hb-online"><i className="dot on" aria-hidden />{compact(online + 1)} online</span>}

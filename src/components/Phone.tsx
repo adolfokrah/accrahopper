@@ -12,6 +12,9 @@ import { GOALS, TASK_BY_ID, taskProgress } from '@/game/life'
 import { DreamCard, LifeGoalsList } from './LifeUI'
 import { CityMap } from './CityMap'
 import { useUI, type PhoneTab } from '@/game/ui'
+import { useAccount } from '@/game/net/account'
+import { useRemoteIds } from '@/game/net/remotes'
+import { NEARBY_THREAD, friendAction, loadConversations, loadFriends, openPlayer, openThread, say, sendDm, socialLive, useSocial } from '@/game/net/social'
 import { SKILL_IDS, type TxCategory } from '@/game/types'
 
 interface AppDef {
@@ -98,7 +101,8 @@ function HomeScreen() {
   const money = useGame((s) => s.money)
   const housing = useGame((s) => s.housing)
   const unread = useUI((s) => s.unread)
-  const chatUnread = useGame((s) => Object.values(s.chatUnread).reduce((a, b) => a + b, 0))
+  const requests = useSocial((s) => s.friends.filter((f) => f.status === 'received').length)
+  const chatUnread = useGame((s) => Object.values(s.chatUnread).reduce((a, b) => a + b, 0)) + useSocial((s) => s.unread)
   const h = hourOf(minutes)
   const night = h < 6 || h >= 19
   const rentIn = Math.max(0, housing.nextRentDue - minutes)
@@ -122,7 +126,7 @@ function HomeScreen() {
       </div>
       <div className="ios-dots" aria-hidden><i className="on" /><i /></div>
       <div className="ios-dock">
-        {DOCK.map((a) => <Icon key={a.id} app={a} badge={a.id === 'chat' ? chatUnread : undefined} />)}
+        {DOCK.map((a) => <Icon key={a.id} app={a} badge={a.id === 'chat' ? chatUnread : a.id === 'contacts' ? requests : undefined} />)}
       </div>
     </div>
   )
@@ -457,19 +461,17 @@ function Contacts() {
           <Row title="Personality" sub={n.personality} />
           <Row title="Usually at" detail={DEST_BY_ID[n.destId].name} />
         </Group>
-        <p className="ios-foot">{n.name} is a demo character built into this single-player game, not a real person.</p>
+        <p className="ios-foot">{n.name} is a character run by the game, not a real player.</p>
       </AppShell>
     )
   }
   return (
     <AppShell title="Contacts">
-      <Group footer="These are NPCs (demo characters). Visit them in person to chat and grow friendships.">
+      <PlayerContacts />
+      <Group header="People in Accra" footer="NPCs are characters run by the game. Visit them in person to chat and grow friendships.">
         {sorted.map((n) => (
           <Row key={n.id} icon={n.emoji} iconBg="#f2f2f7" title={<>{n.name} <i className="npc-badge">NPC</i></>} sub={`${n.role} · ${friendName(friendPoints(s, n.id))}`} chevron onClick={() => setSel(n.id)} />
         ))}
-      </Group>
-      <Group header="Online friends" footer="Not available yet. This version is single-player, so there are no other players, live counts or chat. Multiplayer will run on a server that owns money, items and rewards.">
-        <Row icon="🌐" iconBg="#e5e5ea" title={<span className="muted-t">Friends & chat</span>} detail="Coming later" />
       </Group>
     </AppShell>
   )
@@ -726,7 +728,105 @@ function GroupInfo({ groupId, friends, onBack, onLeft }: { groupId: string; frie
   )
 }
 
+/** Real players in Contacts: friend requests and friends (online or not; never where they are). */
+function PlayerContacts() {
+  const friends = useSocial((s) => s.friends)
+  const online = useRemoteIds((s) => s.ids)
+  const live = useAccount((s) => s.live)
+  useEffect(() => { void loadFriends() }, [])
+  const requests = friends.filter((f) => f.status === 'received')
+  const mine = friends.filter((f) => f.status !== 'received')
+  return (
+    <>
+      {requests.length > 0 && (
+        <Group header="Friend requests">
+          {requests.map((f) => (
+            <div key={f.id} className="ios-row">
+              <span className="ios-row-icon" style={{ background: '#dbeafe' }}>🌐</span>
+              <span className="ios-row-main"><span className="ios-row-title">{f.name}</span><span className="ios-row-sub">@{f.username}</span></span>
+              <span className="row-actions">
+                <button className="ios-chip" onClick={() => void friendAction(f.id, 'accept')}>Accept</button>
+                <button className="ios-chip" onClick={() => void friendAction(f.id, 'remove')}>Decline</button>
+              </span>
+            </div>
+          ))}
+        </Group>
+      )}
+      <Group header="Player friends" footer={live ? 'Real players. Tap someone in the city to add them as a friend.' : 'Live play is off right now.'}>
+        {!mine.length && <Row icon="🌐" iconBg="#e5e5ea" title={<span className="muted-t">No player friends yet</span>} />}
+        {mine.map((f) => (
+          <Row key={f.id} icon="🌐" iconBg="#dbeafe" title={f.name}
+            sub={f.status === 'sent' ? 'Request sent' : <><i className={`dot ${online.includes(f.id) ? 'on' : ''}`} /> {online.includes(f.id) ? 'Online' : 'Offline'}</>}
+            chevron onClick={() => openPlayer(f.id)} />
+        ))}
+      </Group>
+    </>
+  )
+}
+
+/** Chat thread with a real player, or the 📍 Nearby thread (said out loud to people around you). */
+function PlayerThread({ id }: { id: string }) {
+  const nearby = id === NEARBY_THREAD
+  const msgs = useSocial((s) => s.threads[id])
+  const lines = useSocial((s) => s.nearby)
+  const name = useSocial((s) => s.conversations.find((c) => c.other === id)?.name ?? s.friends.find((f) => f.id === id)?.name) ?? 'Player'
+  const meId = useAccount((s) => s.user?.id)
+  const view = useGame((s) => s.view)
+  const [text, setText] = useState('')
+  const [err, setErr] = useState<string | null>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const count = nearby ? lines.length : msgs?.length ?? 0
+  useEffect(() => { if (!nearby && !msgs) void openThread(id) }, [id, nearby, msgs])
+  useEffect(() => { const el = bodyRef.current; if (el) el.scrollTop = el.scrollHeight }, [count])
+  const blocked = nearby && (view === 'home' || !socialLive())
+  const send = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const t = text.trim()
+    if (!t || blocked) return
+    sfx('click')
+    setText('')
+    if (nearby) say(t)
+    else setErr(await sendDm(id, t))
+  }
+  return (
+    <div className="ios-app-view wa">
+      <div className="wa-head">
+        <button className="ios-back" onClick={() => useSocial.setState({ thread: null })} aria-label="Back to chats">‹</button>
+        <button className="wa-head-btn" onClick={() => !nearby && openPlayer(id)} disabled={nearby}>
+          <span className="avatar-sm">{nearby ? '📍' : '🌐'}</span>
+          <div><b>{nearby ? 'Nearby' : name}</b><small>{nearby ? (view === 'inside' ? 'Everyone in this place hears you' : 'People around you hear you') : 'Player'}</small></div>
+        </button>
+      </div>
+      <div className="wa-body" ref={bodyRef}>
+        {nearby
+          ? <>{!lines.length && <div className="ios-stamp">Talk to players near you. Your words pop up over your head.</div>}
+              {lines.map((l) => <div key={l.id} className={`wa-msg ${l.from === meId ? 'me' : ''}`}>{l.from !== meId && <b className="wa-from">{l.name}</b>}{l.text}</div>)}</>
+          : <>{!msgs && <div className="ios-stamp">Loading…</div>}
+              {msgs?.length === 0 && <div className="ios-stamp">Say hello 👋</div>}
+              {msgs?.map((m) => <div key={m.id} className={`wa-msg ${m.from_user === meId ? 'me' : ''}`}>{m.body}</div>)}</>}
+        {err && <div className="wa-sys">{err}</div>}
+      </div>
+      <div className="wa-foot">
+        {!nearby && (
+          <div className="wa-quick">
+            <button className="ios-chip amount" onClick={() => openPlayer(id)}>💸 Send MoMo</button>
+          </div>
+        )}
+        <form className="wa-input" onSubmit={send}>
+          <input value={text} maxLength={nearby ? 140 : 300} placeholder={blocked ? (view === 'home' ? 'Step out of your home to talk' : 'Live play is off') : 'Message'} disabled={blocked}
+            onChange={(e) => setText(e.target.value)} aria-label={nearby ? 'Say to people nearby' : `Message ${name}`} />
+          <button type="submit" className="wa-send" disabled={!text.trim() || blocked} aria-label="Send">➤</button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function Chat() {
+  const pthread = useSocial((p) => p.thread)
+  const convos = useSocial((p) => p.conversations)
+  const live = useAccount((a) => a.live)
+  useEffect(() => { void loadConversations() }, [])
   const s = useGame()
   const typing = useUI((u) => u.chatTyping)
   const [thread, setThread] = useState<string | null>(null)
@@ -748,6 +848,7 @@ function Chat() {
     if (thread && thread !== 'squad' && !s.groups[thread] && !NPCS.some((n) => n.id === thread)) setThread(null)
   }, [thread, s.groups])
 
+  if (pthread) return <PlayerThread id={pthread} />
   if (screen === 'new') return <NewGroup friends={people} onDone={(id) => { setScreen('list'); if (id) setThread(id) }} />
   if (screen === 'info' && thread && s.groups[thread]) return <GroupInfo groupId={thread} friends={people} onBack={() => setScreen('list')} onLeft={() => { setThread(null); setScreen('list') }} />
 
@@ -794,7 +895,14 @@ function Chat() {
       <div className="wa-toolbar">
         <button className="wa-newgroup" onClick={() => { sfx('click'); setScreen('new') }}>👥 New group</button>
       </div>
-      <Group footer={people.length ? 'Texting friends keeps you social and grows friendships (once a day each).' : 'Meet people around Accra and chat with them in person to add them here.'}>
+      <Group header="Players">
+        {live && <Row icon="📍" iconBg="#ffe8b3" title="Nearby" sub="Talk out loud to players around you" chevron onClick={() => useSocial.setState({ thread: NEARBY_THREAD })} />}
+        {convos.map((c) => (
+          <Row key={c.other} icon="🌐" iconBg="#dbeafe" title={c.name} sub={c.last_body} detail={c.unread > 0 ? <span className="wa-badge">{c.unread}</span> : undefined} chevron onClick={() => useSocial.setState({ thread: c.other })} />
+        ))}
+        {!convos.length && <Row icon="🌐" iconBg="#e5e5ea" title={<span className="muted-t">No player chats yet</span>} sub="Tap a player in the city, then 💬 Message" />}
+      </Group>
+      <Group header="Friends in Accra" footer={people.length ? 'Texting friends keeps you social and grows friendships (once a day each).' : 'Meet people around Accra and chat with them in person to add them here.'}>
         {squad.length >= 2 && (
           <Row icon="🇬🇭" iconBg="#25d366" title={<>Accra Squad <small className="muted-t">· group</small></>} sub={last('squad')?.text ?? 'Group chat with your friends'} detail={(s.chatUnread.squad ?? 0) > 0 ? <span className="wa-badge">{s.chatUnread.squad}</span> : undefined} chevron onClick={() => setThread('squad')} />
         )}

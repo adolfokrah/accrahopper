@@ -5126,67 +5126,6 @@ button.ios-row:active {
 .dot.on {
   background: var(--green);
 }
-.seg {
-  display: flex;
-  gap: 4px;
-  background: rgba(31, 45, 69, 0.06);
-  border-radius: 12px;
-  padding: 3px;
-  margin-bottom: 10px;
-}
-.seg button {
-  flex: 1;
-  border: 0;
-  background: none;
-  padding: 7px 4px;
-  border-radius: 9px;
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--muted);
-  cursor: pointer;
-}
-.seg button.on {
-  background: var(--panel-solid);
-  color: var(--ink);
-  box-shadow: var(--shadow-s);
-}
-.plist {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.plist li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.prow {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex-wrap: wrap;
-  text-align: left;
-  border: 1px solid var(--line);
-  background: var(--panel-solid);
-  border-radius: 12px;
-  padding: 9px 11px;
-  font: inherit;
-  color: var(--ink);
-  cursor: pointer;
-}
-.ellipsis {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-}
 .say-row {
   display: flex;
   gap: 6px;
@@ -5195,16 +5134,6 @@ button.ios-row:active {
 .say-row .text-input {
   flex: 1;
   min-width: 0;
-}
-.nearby-log {
-  font-size: 0.8rem;
-  background: rgba(31, 45, 69, 0.05);
-  border-radius: 10px;
-  padding: 6px 9px;
-  margin-bottom: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
 }
 .emote-row {
   display: flex;
@@ -5234,29 +5163,11 @@ button.ios-row:active {
   opacity: 0.45;
   cursor: default;
 }
-.dm-list {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  max-height: 45vh;
-  overflow: auto;
-  padding: 6px 0;
-}
-.dm {
-  align-self: flex-start;
-  max-width: 80%;
-  background: rgba(31, 45, 69, 0.07);
-  border-radius: 14px 14px 14px 4px;
-  padding: 6px 10px;
-  font-size: 0.88rem;
-  overflow-wrap: anywhere;
-}
-.dm.mine {
-  align-self: flex-end;
-  background: var(--blue);
-  color: #fff;
-  border-radius: 14px 14px 4px 14px;
-}
 small.err {
   color: var(--red);
+}
+.row-actions {
+  display: flex;
+  gap: 6px;
+  flex: none;
 }
