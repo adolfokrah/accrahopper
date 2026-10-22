@@ -16,13 +16,15 @@ export async function PUT(request: Request) {
   if (!user) return Response.json({ error: 'Not signed in' }, { status: 401 })
   const text = await request.text()
   if (text.length > MAX_BYTES) return Response.json({ error: 'Save too large' }, { status: 413 })
-  let env: { version?: unknown; game?: { profile?: unknown } } | null = null
+  let env: { version?: unknown; owner?: unknown; game?: { profile?: unknown } } | null = null
   try {
     env = JSON.parse(text)
   } catch {
     /* handled below */
   }
   if (!env || typeof env.version !== 'number' || !env.game?.profile) return Response.json({ error: 'Bad save' }, { status: 400 })
+  // a tab still holding another account's game (the session changed under it) must not overwrite this one
+  if (typeof env.owner === 'string' && env.owner !== user.id) return Response.json({ error: 'This game belongs to another account' }, { status: 409 })
   await query(
     `insert into saves (user_id, data, updated_at) values ($1, $2::jsonb, now())
      on conflict (user_id) do update set data = excluded.data, updated_at = now()`,

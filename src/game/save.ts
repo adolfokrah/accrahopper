@@ -1,6 +1,7 @@
 import { BALANCE, GAME_CONFIG, clamp } from './config'
 import { CAREERS, DEST_BY_ID, EVENTS, FURNITURE, HOMES, ILLNESSES, OFFICERS, OUTDOOR_KINDS, PETS, PLOT_BY_ID, PROJECTS, homeDestId } from './content'
 import { freshGame, useGame, type SavedGame } from './store'
+import { useUI } from './ui'
 import { MAP_H, MAP_W, walkable } from './world'
 import type { NeedId, Profile } from './types'
 
@@ -11,8 +12,18 @@ const MAP_VERSION = 4
 export interface SaveEnvelope {
   version: number
   savedAt: string
+  /** Account the game in memory belongs to: the server refuses to save it into any other account. */
+  owner?: string
   game: SavedGame
 }
+
+let owner: string | null = null
+/** Called when a life starts or loads, with the signed-in account it belongs to. */
+export function setSaveOwner(id: string | null) {
+  owner = id
+}
+/** Set once the server refuses a save: another tab switched accounts, so this one must stop. */
+let stale = false
 
 const SAVE_KEYS: (keyof SavedGame)[] = [
   'profile', 'minutes', 'money', 'needs', 'skills', 'careers', 'employment', 'housing', 'inventory', 'friendships',
@@ -26,7 +37,16 @@ export function serialize(): SaveEnvelope {
   const game: Record<string, unknown> = {}
   for (const k of SAVE_KEYS) game[k] = s[k as keyof typeof s]
   game.mapVersion = MAP_VERSION
-  return { version: GAME_CONFIG.save.version, savedAt: new Date().toISOString(), game: game as unknown as SavedGame }
+  return { version: GAME_CONFIG.save.version, savedAt: new Date().toISOString(), ...(owner ? { owner } : {}), game: game as unknown as SavedGame }
+}
+
+/** Another tab signed in as someone else: stop saving this life and send the player back to the menu. */
+function onWrongAccount() {
+  if (stale) return
+  stale = true
+  useGame.getState().toMenu()
+  useUI.getState().toast('You signed in as a different player in another tab. Reloading so your progress stays with the right account…', 'warn')
+  if (typeof window !== 'undefined') setTimeout(() => window.location.reload(), 3000)
 }
 
 let inflight: Promise<boolean> | null = null
@@ -56,7 +76,7 @@ export async function withSaveHeld<T>(fn: () => Promise<T>): Promise<T> {
  * one trailing upload. `leaving` uses a keepalive request so it can finish while the page closes.
  */
 export function saveNow(leaving = false): Promise<boolean> {
-  if (useGame.getState().screen !== 'game') return Promise.resolve(false)
+  if (useGame.getState().screen !== 'game' || stale) return Promise.resolve(false)
   if (held) return leaving ? Promise.resolve(false) : held.then(() => saveNow())
   if (inflight && !leaving) {
     queued = true
@@ -70,7 +90,10 @@ export function saveNow(leaving = false): Promise<boolean> {
     // browsers cap keepalive bodies at 64 KB
     keepalive: leaving && body.length < 60_000,
   })
-    .then((r) => r.ok)
+    .then((r) => {
+      if (r.status === 409) onWrongAccount()
+      return r.ok
+    })
     .catch(() => false)
   if (leaving) return run
   inflight = run.finally(() => {

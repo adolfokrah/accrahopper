@@ -4,7 +4,8 @@ import { sfx } from '@/game/audio'
 import { ACCESSORIES, AREA_BY_ID, BEARDS, BODY_TYPES, DEFAULT_APPEARANCE, PRONOUNS, SEXES, HAIRSTYLES, HAIR_COLORS, LIFESTYLES, OUTFITS, OUTFIT_COLORS, ROOM_HOMES, SKIN_TONES, START_AREAS, TRAITS, TRAIT_IDS, type Lifestyle } from '@/game/content'
 import { GAME_CONFIG } from '@/game/config'
 import { AMBITIONS } from '@/game/life'
-import { saveNow } from '@/game/save'
+import { saveNow, setSaveOwner } from '@/game/save'
+import { useAccount } from '@/game/net/account'
 import { useGame } from '@/game/store'
 import type { Appearance, Pronouns, TraitId } from '@/game/types'
 import { AvatarPreview } from './AvatarPreview'
@@ -67,6 +68,7 @@ export function Creator() {
       else areaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
+    setSaveOwner(useAccount.getState().user?.id ?? null)
     useGame.getState().startNewGame({ name: name.trim().replace(/\s+/g, ' ').slice(0, NAME_MAX), appearance: a, traits: [traits[0], traits[1]], pronouns, dream: dream ?? undefined }, { lifestyle: life, area })
     sfx('start')
     saveNow()

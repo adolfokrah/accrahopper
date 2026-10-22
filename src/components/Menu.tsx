@@ -3,7 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { sfx } from '@/game/audio'
 import { GAME_CONFIG, dayOf, formatMoney } from '@/game/config'
 import { enter, signOut, useAccount, usernameFree } from '@/game/net/account'
-import { readCloudSave, readDeviceSave, retireDeviceSave, saveNow, type LoadResult, type SaveEnvelope } from '@/game/save'
+import { readCloudSave, readDeviceSave, retireDeviceSave, saveNow, setSaveOwner, type LoadResult, type SaveEnvelope } from '@/game/save'
 import { useGame } from '@/game/store'
 import { Btn, Modal } from './kit'
 import { SettingsPanel } from './SettingsPanel'
@@ -82,6 +82,7 @@ export function Menu() {
   }
   const resume = (env: SaveEnvelope) => {
     sfx('start')
+    setSaveOwner(useAccount.getState().user?.id ?? null)
     useGame.getState().loadFromSave(env.game)
     if (fromDevice) void saveNow().then((ok) => ok && retireDeviceSave())
   }
