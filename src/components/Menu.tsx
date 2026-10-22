@@ -132,6 +132,7 @@ export function Menu() {
             <li>🖱️ <b>Move:</b> tap or click the ground. Or use <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>.</li>
             <li>🏢 <b>Buildings:</b> tap one to see what you can do there.</li>
             <li>✋ <b>Camera:</b> drag to pan, scroll or pinch to zoom, 🎯 to find yourself.</li>
+            <li>🔄 <b>Turn the map:</b> twist two fingers, swipe sideways with two fingers on a trackpad, or right-drag (or Shift + drag) with a mouse.</li>
             <li>📱 <b>Phone:</b> jobs, skills, map, wallet and contacts.</li>
             <li>💾 <b>Saves:</b> automatic, to your account. Play on any device.</li>
             <li>🕰️ <b>One clock:</b> every player shares Accra's time. A game day takes 24 real minutes. While you are away, whatever you were doing finishes, and your needs and bills wait for you.</li>

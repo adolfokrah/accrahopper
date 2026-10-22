@@ -146,10 +146,25 @@ function CameraRig() {
     const wheel = (e: WheelEvent) => {
       e.preventDefault()
       if (rideView.active) return
+      // two-finger sideways swipe on a trackpad (or Shift + wheel) turns the map; up/down zooms
+      const side = e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX
+      if (!e.ctrlKey && Math.abs(side) > Math.abs(e.shiftKey ? 0 : e.deltaY)) {
+        if (!busy()) turnCam(Math.max(-40, Math.min(40, side)) * (e.deltaMode === 1 ? 0.06 : 0.004))
+        return
+      }
       // trackpad pinch arrives as ctrl+wheel with small deltas; mouse wheels use bigger steps
       const scale = e.ctrlKey ? 0.01 : e.deltaMode === 1 ? 0.05 : 0.0015
       const f = Math.exp(-Math.max(-60, Math.min(60, e.deltaY)) * scale)
       zoomAt(f, e.clientX, e.clientY)
+    }
+    // Safari trackpad: two-finger rotate gesture
+    let gestureAngle = 0
+    const gstart = (e: Event) => { e.preventDefault(); gestureAngle = (e as unknown as { rotation: number }).rotation }
+    const gchange = (e: Event) => {
+      e.preventDefault()
+      const r = (e as unknown as { rotation: number }).rotation
+      if (!busy()) turnCam(((gestureAngle - r) * Math.PI) / 180)
+      gestureAngle = r
     }
     const ctx = (e: Event) => e.preventDefault()
     el.addEventListener('pointerdown', down)
@@ -158,7 +173,11 @@ function CameraRig() {
     window.addEventListener('pointercancel', up)
     el.addEventListener('wheel', wheel, { passive: false })
     el.addEventListener('contextmenu', ctx)
+    el.addEventListener('gesturestart', gstart)
+    el.addEventListener('gesturechange', gchange)
     return () => {
+      el.removeEventListener('gesturestart', gstart)
+      el.removeEventListener('gesturechange', gchange)
       el.removeEventListener('pointerdown', down)
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
