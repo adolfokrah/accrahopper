@@ -73,7 +73,7 @@ function SlotBody({ index, assigned, motion }: { index: number; assigned: React.
   const tap = useCallback(() => { if (id) openPlayer(id) }, [id])
   return (
     <>
-      <Character appearance={st?.appearance ?? DEFAULT_APPEARANCE} lite getMotion={() => motion} />
+      <Character appearance={st?.appearance ?? DEFAULT_APPEARANCE} getMotion={() => motion} />
       <Label id={`remote-${index}`} y={1.8} cls="remote-tag" text={st ? `🌐 ${st.name}` : ''} range={30} onTap={st ? tap : undefined} />
       <Label id={`remote-bubble-${index}`} y={2.35} cls="chat-bubble" text={bubble} range={30} />
     </>

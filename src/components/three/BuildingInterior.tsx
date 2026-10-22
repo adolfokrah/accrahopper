@@ -1058,7 +1058,7 @@ function RemoteInside({ id }: { id: string }) {
   if (!st) return null
   return (
     <group ref={g} position={[st.inside?.x ?? 0, 0.12, st.inside?.z ?? 0]}>
-      <Character appearance={st.appearance ?? DEFAULT_APPEARANCE} lite getMotion={() => motion.current} />
+      <Character appearance={st.appearance ?? DEFAULT_APPEARANCE} getMotion={() => motion.current} />
       <Label id={`inside-remote-${id}`} y={1.85} cls="remote-tag" text={`🌐 ${st.name}`} onTap={tap} />
       <Label id={`inside-bubble-${id}`} y={2.35} cls="chat-bubble" text={bubble} />
     </group>
@@ -1252,7 +1252,7 @@ function Room({ destId, layout }: { destId: string; layout: Layout }) {
       </group>
       {crowd.map((c, i) => (
         <group key={i} position={[c.x, 0.12 + (c.y ?? 0), c.z]} rotation={[0, c.rot ?? 0, 0]}>
-          <Character appearance={c.look} lite getMotion={() => ({ moving: false, speed: 0, action: c.pose ?? null, prop: c.prop ?? null })} />
+          <Character appearance={c.look} getMotion={() => ({ moving: false, speed: 0, action: c.pose ?? null, prop: c.prop ?? null })} />
         </group>
       ))}
 

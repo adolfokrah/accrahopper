@@ -56,3 +56,8 @@ npm run dev                  # http://localhost:3000
 - `src/components/Phone.tsx`: iPhone-style phone UI
 
 Multiplayer is intentionally out of scope. When added, currency, purchases, inventory and rewards must be server-authoritative; the activity resolver in `activities.ts` is the natural place to move behind an API.
+
+## People and animation credits
+- Characters: [Quaternius](https://quaternius.com) Ultimate Modular Men & Women (CC0), ~6k triangles each, converted to compressed GLB in `public/models/people/`
+- Dance clip: Quaternius Universal Animation Library (CC0), retargeted at load time (`public/models/ual-dance.glb`)
+- Poses without a clip (sitting, eating, driving, kneeling...) layer the game's hand-tuned joint angles on the idle clip (`src/components/three/Human.tsx`); `/debug/poses` (dev only) shows every pose side by side

@@ -4,6 +4,7 @@ import { useRef } from 'react'
 import * as THREE from 'three'
 import { ACCESSORIES, HAIR_COLORS, OUTFITS, OUTFIT_COLORS, SKIN_TONES } from '@/game/content'
 import type { Appearance } from '@/game/types'
+import { Human, useHumanReady } from './Human'
 import { getMat } from './shared'
 
 export type Pose =
@@ -55,15 +56,15 @@ const GH = {
   sphere: new THREE.SphereGeometry(1, 24, 18),
 }
 
-interface J {
+export interface J {
   hipL: number; hipR: number; kneeL: number; kneeR: number
   shL: number; shR: number; shLz: number; shRz: number; elL: number; elR: number
   spineX: number; spineY: number; headX: number; headY: number; y: number; rootX: number
 }
-const zero = (): J => ({ hipL: 0, hipR: 0, kneeL: 0, kneeR: 0, shL: 0, shR: 0, shLz: 0, shRz: 0, elL: 0, elR: 0, spineX: 0, spineY: 0, headX: 0, headY: 0, y: 0, rootX: 0 })
+export const zero = (): J => ({ hipL: 0, hipR: 0, kneeL: 0, kneeR: 0, shL: 0, shR: 0, shLz: 0, shRz: 0, elL: 0, elR: 0, spineX: 0, spineY: 0, headX: 0, headY: 0, y: 0, rootX: 0 })
 
 /** Target joint angles for a pose at time t (walk phase p). */
-function poseTarget(m: Motion, t: number, p: number): J {
+export function poseTarget(m: Motion, t: number, p: number): J {
   const j = zero()
   const sit = () => { j.hipL = j.hipR = -1.5; j.kneeL = j.kneeR = 1.5; j.y = -0.15; j.shL = j.shR = -0.35; j.elL = j.elR = -0.5 }
   if (m.moving) {
@@ -145,7 +146,17 @@ function poseTarget(m: Motion, t: number, p: number): J {
   return j
 }
 
-export function Character({ appearance, getMotion, lite = false, scale = 1 }: Props) {
+/**
+ * A person. Up close (not `lite`) this is the realistic rigged model once it has loaded;
+ * crowds and the loading moment use the light code-built body.
+ */
+export function Character(props: Props) {
+  const ready = useHumanReady(props.lite ? undefined : props.appearance)
+  if (!props.lite && ready) return <Human appearance={props.appearance} getMotion={props.getMotion} scale={props.scale} />
+  return <BlockCharacter {...props} />
+}
+
+function BlockCharacter({ appearance, getMotion, lite = false, scale = 1 }: Props) {
   const skin = SKIN_TONES[appearance.skin] ?? SKIN_TONES[0]
   const hairC = HAIR_COLORS[appearance.hairColor] ?? '#222'
   const outfit = OUTFITS[appearance.outfit] ?? OUTFITS[0]
@@ -342,7 +353,7 @@ function shadeHex(hex: string, k: number) {
 }
 
 import { forwardRef } from 'react'
-const HandProps = forwardRef<THREE.Group>(function HandProps(_, ref) {
+export const HandProps = forwardRef<THREE.Group>(function HandProps(_, ref) {
   const M = (c: string, r = 0.6) => getMat(c, 1, r)
   return (
     <group ref={ref} position={[0, -0.25, 0.04]}>
