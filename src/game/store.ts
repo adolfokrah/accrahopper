@@ -543,6 +543,9 @@ function advance(d: GameState, minutes: number, decay = true) {
   d.minutes += minutes
 }
 
+/** Activity minutes served per minute of the shared clock (prison and custody would otherwise take hours). */
+const SERVE_PACE: Partial<Record<ActiveActivity['kind'], number>> = { jail: 10, custody: 6 }
+
 /** "3 days 4h" for a stretch of game minutes. */
 function formatAway(min: number) {
   const days = Math.floor(min / 1440)
@@ -583,7 +586,7 @@ export function catchUpToWorld(d: SavedGame, now = worldMinutes()): number {
   const gap = now - d.minutes
   if (gap <= 0) return 0
   const a = d.activity
-  const carry = a && !a.shift ? Math.min(gap, a.total - a.done) : 0
+  const carry = a && !a.shift ? Math.min(gap, (a.total - a.done) / (SERVE_PACE[a.kind] ?? 1)) : 0
   shiftTimeline(d, gap - carry)
   // the activity's remaining minutes are played out by the next tick
   d.minutes = now - carry
@@ -1865,8 +1868,10 @@ export const useGame = create<GameState>((set, get) => ({
       const a = { ...d.activity }
       // rides wait at red lights: the trip pauses but the clock keeps running
       const held = a.kind === 'travel' && !!runtime.ride?.holding
-      used = held ? 0 : Math.min(a.total - a.done, step)
-      a.done += used
+      // time inside passes faster than the shared clock, so a sentence is minutes, not hours
+      const pace = SERVE_PACE[a.kind] ?? 1
+      used = held ? 0 : Math.min((a.total - a.done) / pace, step)
+      a.done += used * pace
       const frac = a.done / a.total
       applyNeeds(d, a.needs, frac - a.appliedFrac)
       a.appliedFrac = frac
