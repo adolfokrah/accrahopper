@@ -1044,7 +1044,7 @@ export function PhonePanel() {
   const tab = useUI((s) => s.phoneTab)
   const app = tab === 'home' ? null : tab
   return (
-    <div className="phone-wrap" role="dialog" aria-label="Phone">
+    <div className="phone-wrap" role="dialog" aria-label="Phone" onClick={(e) => { if (e.target === e.currentTarget) closePhone() }}>
       <div className="iphone">
         <span className="btn-side power" onClick={closePhone} title="Lock (close phone)" />
         <span className="btn-side vol1" aria-hidden />
