@@ -14,16 +14,12 @@ export const BALANCE = {
   startMinute: 8 * 60, // Day 1, 08:00
   startNeeds: { hunger: 62, energy: 88, hygiene: 80, bladder: 70, fun: 68, social: 60 } as Needs,
 
-  /** Real seconds -> game minutes. */
+  /** The shared world clock: Day 1 08:00 began at this instant (UTC ms) for every player. */
+  worldEpoch: Date.UTC(2026, 9, 22),
+  /** Real seconds -> game minutes. Everything (shifts, sleep, rides) runs at this one speed. */
   clockMinutesPerSecond: 1,
-  activityMinutesPerSecond: 30,
-  sleepMinutesPerSecond: 80,
-  travelMinutesPerSecond: 24,
-  /** Real-time length of activities so you can watch them happen (seconds). */
-  activityRealSeconds: { min: 4, max: 20, perGameMinute: 1 / 12 },
-  /** Real seconds a work shift lasts (tasks pop up during it). */
-  shiftRealSeconds: 90,
-  sleepRealSeconds: { min: 3, max: 8, perGameMinute: 1 / 60 },
+  /** A gap in play longer than this (game minutes) counts as being away: your clock freezes. */
+  awayAfterMinutes: 120,
 
   /** Need decay per game hour while idle/walking. */
   decayPerHour: {
@@ -71,7 +67,7 @@ export const BALANCE = {
   },
 
   tutorialBonus: 75,
-  autosaveSeconds: 12,
+  autosaveSeconds: 30,
   maxTransactions: 80,
 }
 

@@ -28,7 +28,7 @@ export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
   const [saved, setSaved] = useState<string | null>(null)
   const game = useGame.getState()
   return (
-    <Sheet title="Settings" icon="⚙️" onClose={onClose ?? (() => useUI.getState().setPanel('none'))} subtitle={onClose ? undefined : 'The game is paused while this is open.'}>
+    <Sheet title="Settings" icon="⚙️" onClose={onClose ?? (() => useUI.getState().setPanel('none'))} subtitle={onClose ? undefined : 'Accra keeps moving while this is open.'}>
       <h3>🔊 Audio</h3>
       <label className="slider"><b>Master volume</b><input type="range" min={0} max={1} step={0.05} value={st.master} onChange={(e) => set({ master: Number(e.target.value) })} aria-label="Master volume" /></label>
       <Toggle label="Sound effects" value={st.sfx} onChange={(sfx) => set({ sfx })} />
@@ -59,12 +59,12 @@ export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
       <h3>💾 Saving</h3>
       <Toggle label="Autosave" hint="Every few seconds and after each activity" value={st.autosave} onChange={(autosave) => set({ autosave })} />
       <div className="row">
-        <Btn small onClick={() => setSaved(saveNow() ? `Saved Day ${dayOf(game.minutes)}, ${formatClock(game.minutes)}` : 'Could not save (storage unavailable)')}>Save now</Btn>
+        <Btn small onClick={async () => { setSaved('Saving…'); setSaved((await saveNow()) ? `Saved Day ${dayOf(game.minutes)}, ${formatClock(game.minutes)}` : 'Could not reach the server. Your game will retry.') }}>Save now</Btn>
         <Btn small kind="ghost" onClick={() => setConfirm('menu')}>Main menu</Btn>
         <Btn small kind="danger" onClick={() => setConfirm('new')}>New game</Btn>
       </div>
       {saved && <small className="ok">{saved}</small>}
-      <small className="muted">Progress is saved on this device only. Single-player time stops while the game is closed.</small>
+      <small className="muted">Progress is saved to your account, so you can play on any device. Accra's clock keeps running while you are away, but your bills and needs wait for you.</small>
 
       {confirm && (
         <Modal label="Confirm">

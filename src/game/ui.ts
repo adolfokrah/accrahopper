@@ -101,7 +101,6 @@ interface UIState {
   panel: PanelId
   selectedDest: string | null
   phoneTab: PhoneTab
-  paused: boolean
   webgl: 'unknown' | 'ok' | 'failed'
   /** Bumped to remount the 3D canvas after a crash or lost GPU context. */
   viewKey: number
@@ -164,7 +163,6 @@ export const useUI = create<UIState>((set, get) => ({
   panel: 'none',
   selectedDest: null,
   phoneTab: 'home',
-  paused: false,
   webgl: 'unknown',
   viewKey: 0,
   gfx: 'ok',

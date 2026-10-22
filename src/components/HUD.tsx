@@ -336,16 +336,6 @@ function IntimacyOverlay() {
   )
 }
 
-function PausedBanner() {
-  const paused = useUI((s) => s.paused)
-  if (!paused) return null
-  return (
-    <div className="paused" role="status">
-      <div className="card">⏸ Paused <Btn small onClick={() => useUI.setState({ paused: false })}>Resume</Btn></div>
-    </div>
-  )
-}
-
 function LowFundsHelp() {
   const money = useGame((s) => s.money)
   const activity = useGame((s) => s.activity)
@@ -541,7 +531,6 @@ export function HUD() {
       <TravelSheet />
       <IntimacyOverlay />
       <CourtModal />
-      <PausedBanner />
     </div>
   )
 }

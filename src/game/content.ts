@@ -1178,7 +1178,7 @@ export const STREET_REQ: Partial<Record<string, number>> = { sakawa: 15, smuggle
 /** Careers that run a background check: minimum respect. */
 export const RESPECT_REQ: Partial<Record<string, number>> = { banker: 25, teacher: 20, nurse: 20 }
 /** Courts and prison. Scales are game minutes per real second: custody ≈ 18 s, a prison day ≈ 24 s (7 days ≈ 3 min). */
-export const LEGAL = { custodyMinutes: 720, custodyScale: 40, courtDays: 2, fine: 300, lawyer: 400, bail: 250, jailGuilty: 3, jailConvicted: 7, jailWarrant: 5, jailScale: 60 }
+export const LEGAL = { custodyMinutes: 720, courtDays: 2, fine: 300, lawyer: 400, bail: 250, jailGuilty: 3, jailConvicted: 7, jailWarrant: 5 }
 
 /* ------------------------------ businesses you can own ------------------------------ */
 export interface BusinessDef {

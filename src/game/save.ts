@@ -29,14 +29,38 @@ export function serialize(): SaveEnvelope {
   return { version: GAME_CONFIG.save.version, savedAt: new Date().toISOString(), game: game as unknown as SavedGame }
 }
 
-export function saveNow(): boolean {
-  try {
-    if (useGame.getState().screen !== 'game') return false
-    localStorage.setItem(KEY, JSON.stringify(serialize()))
-    return true
-  } catch {
-    return false
+let inflight: Promise<boolean> | null = null
+let queued = false
+
+/**
+ * Uploads the current life to the signed-in player's cloud save. Overlapping calls collapse into
+ * one trailing upload. `leaving` uses a keepalive request so it can finish while the page closes.
+ */
+export function saveNow(leaving = false): Promise<boolean> {
+  if (useGame.getState().screen !== 'game') return Promise.resolve(false)
+  if (inflight && !leaving) {
+    queued = true
+    return inflight
   }
+  const body = JSON.stringify(serialize())
+  const run = fetch('/api/save', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+    // browsers cap keepalive bodies at 64 KB
+    keepalive: leaving && body.length < 60_000,
+  })
+    .then((r) => r.ok)
+    .catch(() => false)
+  if (leaving) return run
+  inflight = run.finally(() => {
+    inflight = null
+    if (queued) {
+      queued = false
+      void saveNow()
+    }
+  })
+  return inflight
 }
 
 export type LoadResult = { status: 'none' } | { status: 'ok'; env: SaveEnvelope } | { status: 'invalid'; reason: string }
@@ -185,7 +209,38 @@ function sanitize(raw: unknown): SavedGame {
   return out
 }
 
-export function readSave(): LoadResult {
+function parseEnvelope(parsed: any): SaveEnvelope {
+  if (!parsed || typeof parsed.version !== 'number') throw new Error('missing version')
+  if (parsed.version > GAME_CONFIG.save.version) throw new Error('save is from a newer version')
+  // future migrations: if (parsed.version < 2) parsed = migrateV1toV2(parsed)
+  return { version: parsed.version, savedAt: String(parsed.savedAt ?? ''), game: sanitize(parsed.game) }
+}
+
+/** The signed-in player's cloud save. */
+export async function readCloudSave(): Promise<LoadResult> {
+  let parsed: unknown
+  try {
+    const res = await fetch('/api/save', { cache: 'no-store' })
+    if (!res.ok) return { status: 'invalid', reason: res.status === 401 ? 'not signed in' : 'server unavailable' }
+    parsed = (await res.json()).save
+  } catch {
+    return { status: 'invalid', reason: 'could not reach the server' }
+  }
+  if (!parsed) return { status: 'none' }
+  try {
+    return { status: 'ok', env: parseEnvelope(parsed) }
+  } catch (e) {
+    return { status: 'invalid', reason: e instanceof Error ? e.message : 'unknown error' }
+  }
+}
+
+/** Wipes the cloud save so a new character can start. */
+export async function deleteCloudSave(): Promise<void> {
+  await fetch('/api/save', { method: 'DELETE' }).catch(() => undefined)
+}
+
+/** A save from before accounts existed, still sitting in this browser (offered once for import). */
+export function readDeviceSave(): LoadResult {
   let raw: string | null = null
   try {
     raw = localStorage.getItem(KEY)
@@ -194,23 +249,17 @@ export function readSave(): LoadResult {
   }
   if (!raw) return { status: 'none' }
   try {
-    const parsed = JSON.parse(raw)
-    if (!parsed || typeof parsed.version !== 'number') throw new Error('missing version')
-    if (parsed.version > GAME_CONFIG.save.version) throw new Error('save is from a newer version')
-    // future migrations: if (parsed.version < 2) parsed = migrateV1toV2(parsed)
-    return { status: 'ok', env: { version: parsed.version, savedAt: String(parsed.savedAt ?? ''), game: sanitize(parsed.game) } }
+    return { status: 'ok', env: parseEnvelope(JSON.parse(raw)) }
   } catch (e) {
-    try {
-      localStorage.setItem(`${KEY}:backup`, raw)
-    } catch {
-      /* ignore */
-    }
     return { status: 'invalid', reason: e instanceof Error ? e.message : 'unknown error' }
   }
 }
 
-export function deleteSave() {
+/** Forget the device save once it lives in the cloud (a backup copy stays). */
+export function retireDeviceSave() {
   try {
+    const raw = localStorage.getItem(KEY)
+    if (raw) localStorage.setItem(`${KEY}:backup`, raw)
     localStorage.removeItem(KEY)
   } catch {
     /* ignore */

@@ -10,6 +10,7 @@ import { placeOnRide, rideShouldHold, rotateCam, runtime, stepMovement } from '@
 import { isRoad, junctionCenter, junctionId, junctions, lightFor, nearestJunction, vStreetAt } from '@/game/world'
 import { areaAt } from '@/game/content'
 import { saveNow } from '@/game/save'
+import { restoreSession, useAccount } from '@/game/net/account'
 import { getNetAdapter, pruneStale } from '@/game/net/remotes'
 import { useGame } from '@/game/store'
 import { hydrateSettings, useUI } from '@/game/ui'
@@ -89,6 +90,7 @@ export default function GameRoot() {
   useEffect(() => {
     hydrateSettings()
     useUI.setState({ webgl: detectWebGL() ? 'ok' : 'failed' })
+    void restoreSession()
   }, [])
 
   useEffect(() => {
@@ -114,7 +116,7 @@ export default function GameRoot() {
       last = t
       const g = useGame.getState()
       const ui = useUI.getState()
-      const frozen = g.screen !== 'game' || ui.paused || ui.panel === 'settings' || !!g.event || !!ui.dialog
+      const frozen = g.screen !== 'game' || ui.panel === 'settings' || !!g.event || !!ui.dialog
       const busy = frozen || !!g.activity || g.view !== 'world'
       stepMovement(dt, !busy)
       runtime.lightT += dt
@@ -129,9 +131,10 @@ export default function GameRoot() {
         placeOnRide(frac)
       }
       if (g.screen !== 'game') return
+      // the shared world clock never stops, even with a panel or dialog open
       acc += dt
       if (acc >= 0.1) {
-        if (!frozen) g.tick(acc)
+        g.tick()
         acc = 0
       }
       // jaywalking: stepping onto a road while its traffic has green, near police, can get you stopped
@@ -168,28 +171,21 @@ export default function GameRoot() {
     return () => cancelAnimationFrame(raf)
   }, [])
 
-  // multiplayer presence: publish ~5x/second only when an online adapter is connected
+  // multiplayer presence: up to 5x/second while moving, plus a heartbeat so idle players stay visible
   useEffect(() => {
-    const selfId = (() => {
-      try {
-        const k = 'city-stories:client-id'
-        const v = localStorage.getItem(k) ?? `p_${Math.random().toString(36).slice(2, 10)}`
-        localStorage.setItem(k, v)
-        return v
-      } catch {
-        return `p_${Math.random().toString(36).slice(2, 10)}`
-      }
-    })()
-    let last = { x: 0, z: 0, view: '' }
+    let last = { x: 0, z: 0, view: '', action: '' as string | null, at: 0 }
     const id = setInterval(() => {
       pruneStale()
       const net = getNetAdapter()
       const g = useGame.getState()
-      if (!net.online || g.screen !== 'game' || !g.profile) return
+      const selfId = useAccount.getState().user?.id
+      if (!net.online || !selfId || g.screen !== 'game' || !g.profile) return
       const p = runtime.player
-      if (Math.abs(p.x - last.x) < 0.05 && Math.abs(p.z - last.z) < 0.05 && last.view === g.view) return
-      last = { x: p.x, z: p.z, view: g.view }
-      net.publish({ id: selfId, name: g.profile.name, appearance: g.profile.appearance, x: p.x, z: p.z, rot: p.rot, moving: p.moving, action: g.activity?.defId ?? null, view: g.view, place: g.insideDest, ts: Date.now() })
+      const action = g.activity?.defId ?? null
+      const still = Math.abs(p.x - last.x) < 0.05 && Math.abs(p.z - last.z) < 0.05 && last.view === g.view && last.action === action
+      if (still && Date.now() - last.at < 5000) return
+      last = { x: p.x, z: p.z, view: g.view, action, at: Date.now() }
+      net.publish({ id: selfId, name: g.profile.name, appearance: g.profile.appearance, x: p.x, z: p.z, rot: p.rot, moving: p.moving, action, view: g.view, place: g.insideDest, ts: Date.now() })
     }, 200)
     return () => clearInterval(id)
   }, [])
@@ -212,8 +208,7 @@ export default function GameRoot() {
         if (ui.holdingUid) useUI.setState({ holdingUid: null })
         else if (ui.panel !== 'none') useUI.setState({ panel: 'none', selectedDest: null })
         else ui.setPanel('settings')
-      } else if (k === 'p') useUI.setState((u) => ({ paused: !u.paused }))
-      else if (k === 'f') findMyCharacter()
+      } else if (k === 'f') findMyCharacter()
       else if (k === 'q') rotateCam(-1)
       else if (k === 'e' && e.shiftKey) rotateCam(1)
       else if (k === 'r' && !useUI.getState().holdingUid && !useUI.getState().dragUid) rotateCam(1)
@@ -242,18 +237,19 @@ export default function GameRoot() {
 
   // autosave: interval, tab hide, after results
   useEffect(() => {
-    const auto = () => useUI.getState().settings.autosave && saveNow()
+    const auto = () => { if (useUI.getState().settings.autosave) void saveNow() }
+    const leave = () => { if (useUI.getState().settings.autosave) void saveNow(true) }
     const id = setInterval(auto, BALANCE.autosaveSeconds * 1000)
-    const vis = () => document.hidden && auto()
+    const vis = () => document.hidden && leave()
     document.addEventListener('visibilitychange', vis)
-    window.addEventListener('pagehide', auto)
+    window.addEventListener('pagehide', leave)
     const unsub = useGame.subscribe((s, prev) => {
       if (s.result && s.result !== prev.result) auto()
     })
     return () => {
       clearInterval(id)
       document.removeEventListener('visibilitychange', vis)
-      window.removeEventListener('pagehide', auto)
+      window.removeEventListener('pagehide', leave)
       unsub()
     }
   }, [])

@@ -49,7 +49,6 @@ export function TopPill() {
   const minutes = useGame((s) => s.minutes)
   const needs = useGame((s) => s.needs)
   const housing = useGame((s) => s.housing)
-  const paused = useUI((s) => s.paused)
   const prev = useRef(money)
   const [delta, setDelta] = useState<{ v: number; k: number } | null>(null)
   useEffect(() => {
@@ -80,7 +79,6 @@ export function TopPill() {
           <b>{mood.label}</b>
         </button>
         <span className="hb-grow" />
-        <button className="hb-icon desk" onClick={() => useUI.setState({ paused: !paused })} aria-label={paused ? 'Resume' : 'Pause'} title="Pause (P)">{paused ? Icons.play : Icons.pause}</button>
         <button className="hb-icon" onClick={() => { sfx('click'); useUI.getState().setPanel('settings') }} aria-label="Settings">{Icons.gear}</button>
         <button className="hb-money" onClick={wallet} aria-label="Wallet">
           <b>{formatMoney(money)}</b>

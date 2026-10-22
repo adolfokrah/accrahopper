@@ -1212,21 +1212,6 @@ button.pill {
 .choice small {
   color: var(--muted);
 }
-.paused {
-  position: absolute;
-  top: 40%;
-  left: 50%;
-  transform: translateX(-50%);
-  pointer-events: none;
-}
-.paused .card {
-  pointer-events: auto;
-  padding: 12px 18px;
-  font-weight: 900;
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
 
 /* world labels (drei Html) */
 .loc-label {
@@ -5017,3 +5002,27 @@ button.ios-row:active {
 }
 .item-pop-btns button:active { background: #e3e7ee; }
 .item-pop-btns button.x { background: none; color: #8b95a7; padding: 7px 6px; }
+
+/* sign-in on the main menu */
+.signin {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 4px;
+}
+.signin .btn {
+  padding: 13px 16px;
+  font-size: 1.05rem;
+}
+.signed-in {
+  line-height: 1.5;
+}
+.linkish {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--sky-d);
+  text-decoration: underline;
+  cursor: pointer;
+}

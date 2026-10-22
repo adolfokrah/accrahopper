@@ -170,11 +170,8 @@ export function resolve(def: ActivityDef, ctx: ActivityContext, s: GameState): R
     careerXp = lvl.careerXp
   }
 
-  // time scale: game minutes per real second
-  const real = def.timeScale === 'sleep' ? BALANCE.sleepRealSeconds : BALANCE.activityRealSeconds
-  // work shifts run longer in real time so there is time to do the shift tasks
-  const secs = isWork ? BALANCE.shiftRealSeconds : Math.min(real.max, Math.max(real.min, def.minutes * real.perGameMinute))
-  const scale = def.timeScale === 'travel' ? BALANCE.travelMinutesPerSecond : def.minutes / secs
+  // everything runs on the shared world clock
+  const scale = BALANCE.clockMinutesPerSecond
 
   // ---- availability ------------------------------------------------
   let reason: string | undefined

@@ -82,6 +82,7 @@ import {
   SELL_BACK,
 } from './content'
 import { EXTENSIONS, autoPlace, canExtend, canPlace, extCount, homeRuntime, isBed, itemsInHome, type HomeStyleMap } from './home'
+import { worldMinutes } from './clock'
 import { cancelPath, defaultZoom, runtime, teleport } from './runtime'
 import { nearestJunction, roadRoute } from './world'
 import { plotValue } from './property'
@@ -200,7 +201,8 @@ export interface GameState {
   buyPet: (type: PetType, name: string) => void
   renamePet: (name: string) => void
   rehomePet: () => void
-  tick: (dt: number) => void
+  /** Bring the life up to the shared world clock. */
+  tick: () => void
   syncPlayer: () => void
   startActivity: (defId: string, ctx: ActivityContext) => { ok: boolean; reason?: string }
   cancelActivity: () => void
@@ -297,15 +299,15 @@ export type SavedGame = Omit<GameState, FnKeys<GameState> | 'screen' | 'nearDest
 
 const emptyStats = (): Stats => ({ mealsEaten: 0, shiftsCompleted: 0, sleeps: 0, moneyEarned: 0, moneySpent: 0, tripsTaken: 0, conversations: 0, laundered: 0 })
 
-export const freshGame = (profile: Profile | null): SavedGame => ({
+export const freshGame = (profile: Profile | null, now = Math.floor(worldMinutes())): SavedGame => ({
   profile,
-  minutes: BALANCE.startMinute,
+  minutes: now,
   money: BALANCE.startMoney,
   needs: { ...BALANCE.startNeeds },
   skills: { communication: 0, cooking: 0, technology: 0, fitness: 0 },
   careers: {},
   employment: null,
-  housing: { tier: 'room', nextRentDue: BALANCE.startMinute + BALANCE.rentDays * 1440, overdueSince: null },
+  housing: { tier: 'room', nextRentDue: now + BALANCE.rentDays * 1440, overdueSince: null },
   inventory: [],
   friendships: {},
   transactions: [],
@@ -319,7 +321,7 @@ export const freshGame = (profile: Profile | null): SavedGame => ({
   activity: null,
   event: null,
   result: null,
-  eventCooldownUntil: BALANCE.startMinute + 6 * 60,
+  eventCooldownUntil: now + 6 * 60,
   rentWarnedFor: 0,
   lowFlags: {},
   nextId: 1,
@@ -348,7 +350,7 @@ export const freshGame = (profile: Profile | null): SavedGame => ({
   homeStyle: {},
   bank: { open: false, balance: 0 },
   invest: { tbills: [], shares: {}, prices: Object.fromEntries(STOCKS.map((st) => [st.id, [st.start]])) },
-  tasks: { day: 1, ids: pickTasks({ employment: null, romance: { partner: null }, bank: { open: false } } as never, 1), done: [] },
+  tasks: { day: dayOf(now), ids: pickTasks({ employment: null, romance: { partner: null }, bank: { open: false } } as never, dayOf(now)), done: [] },
   today: {},
   goals: [],
   goalsActive: [],
@@ -541,6 +543,53 @@ function advance(d: GameState, minutes: number, decay = true) {
   d.minutes += minutes
 }
 
+/** "3 days 4h" for a stretch of game minutes. */
+function formatAway(min: number) {
+  const days = Math.floor(min / 1440)
+  const hours = Math.floor((min % 1440) / 60)
+  return days ? `${days} day${days === 1 ? '' : 's'}${hours ? ` ${hours}h` : ''}` : `${hours}h`
+}
+
+/** Something took a while (an argument, a chat): needs wear down, but the shared clock cannot jump. */
+function spendTime(d: GameState, minutes: number) {
+  decayNeeds(d, minutes)
+}
+
+/** Every absolute game-minute timestamp in a life, moved by `by` (deadlines, timers, start times). */
+function shiftTimeline(d: SavedGame, by: number) {
+  const mv = (v: number) => v + by
+  d.housing = { ...d.housing, nextRentDue: mv(d.housing.nextRentDue), overdueSince: d.housing.overdueSince === null ? null : mv(d.housing.overdueSince) }
+  if (d.rentWarnedFor) d.rentWarnedFor = mv(d.rentWarnedFor)
+  d.eventCooldownUntil = mv(d.eventCooldownUntil)
+  d.health = { ...d.health, since: mv(d.health.since), protectedUntil: d.health.protectedUntil ? mv(d.health.protectedUntil) : 0 }
+  if (d.legal.caseDeadline !== null) d.legal = { ...d.legal, caseDeadline: mv(d.legal.caseDeadline) }
+  if (d.loan) d.loan = { ...d.loan, due: mv(d.loan.due) }
+  d.plots = Object.fromEntries(Object.entries(d.plots).map(([k, p]) => [k, { ...p, permitReady: p.permitReady === null ? null : mv(p.permitReady), until: p.until === null ? null : mv(p.until) }]))
+  d.tenants = Object.fromEntries(Object.entries(d.tenants).map(([k, t]) => [k, t.until === undefined ? t : { ...t, until: mv(t.until) }]))
+  d.invest = { ...d.invest, tbills: d.invest.tbills.map((b) => ({ ...b, matures: mv(b.matures) })) }
+  d.businesses = Object.fromEntries(Object.entries(d.businesses).map(([k, b]) => [k, { ...b, since: mv(b.since) }]))
+  if (d.pet) d.pet = { ...d.pet, since: mv(d.pet.since) }
+  d.lifeFlags = Object.fromEntries(Object.entries(d.lifeFlags).map(([k, v]) => [k, mv(v)]))
+  if (d.activity) d.activity = { ...d.activity, startedAt: mv(d.activity.startedAt) }
+}
+
+/**
+ * Brings a life up to the shared clock after time away (offline, or a long-hidden tab).
+ * Whatever you were doing (sleep, a trip, jail) keeps going while you are away; apart from that
+ * your life is frozen: needs do not drain and every deadline moves later by the time you missed.
+ * Work shifts need you there, so they simply resume.
+ */
+export function catchUpToWorld(d: SavedGame, now = worldMinutes()): number {
+  const gap = now - d.minutes
+  if (gap <= 0) return 0
+  const a = d.activity
+  const carry = a && !a.shift ? Math.min(gap, a.total - a.done) : 0
+  shiftTimeline(d, gap - carry)
+  // the activity's remaining minutes are played out by the next tick
+  d.minutes = now - carry
+  return gap
+}
+
 function missingRequirements(d: Pick<GameState, 'skills'>, career: CareerId, levelIdx: number): string[] {
   const req = CAREERS[career].levels[levelIdx].requires
   const out: string[] = []
@@ -584,8 +633,10 @@ function makeActivity(d: GameState, def: ReturnType<typeof findDef> & object, ct
 }
 
 /* ------------------------------ work shift tasks ------------------------------ */
-/** Real seconds a task stays on the board, takes to do, and between new tasks. */
-const SHIFT = { window: 16, doing: 3.5, gapMin: 5, gapMax: 9, perShift: 10 }
+/** Shift task timings (multiplied by the activity scale): on the board, to do, between new tasks. */
+const SHIFT = { window: 40, doing: 5, gapMin: 18, gapMax: 30 }
+/** Tasks a full shift of this length is expected to offer, so task pay adds up to half the wage. */
+const shiftTaskCount = (a: ActiveActivity) => Math.max(1, Math.round(a.total / (a.scale * (SHIFT.gapMin + SHIFT.gapMax) / 2)))
 
 function stepShift(d: GameState, a: ActiveActivity): ActiveActivity | null {
   const sh = a.shift
@@ -593,7 +644,7 @@ function stepShift(d: GameState, a: ActiveActivity): ActiveActivity | null {
   if (!sh || !career) return a
   const c = CAREERS[career]
   const next: ShiftState = { ...sh, queue: [...sh.queue] }
-  const perTask = Math.round((a.reward * 0.5) / SHIFT.perShift)
+  const perTask = Math.round((a.reward * 0.5) / shiftTaskCount(a))
   // finish the task being done
   if (next.current && a.done >= next.current.until) {
     const t = next.current
@@ -1129,7 +1180,7 @@ function arrest(d: GameState, charge: keyof typeof CHARGES = 'theft') {
   enterPlace(d, 'police')
   d.activity = {
     uid: d.nextId++, defId: 'custody', label: 'Held in police custody', icon: '🚓', kind: 'custody', ctx: { dest: 'police' },
-    total: LEGAL.custodyMinutes, done: 0, scale: LEGAL.custodyScale, needs: { fun: -15, social: -10, hygiene: -10 }, appliedFrac: 0,
+    total: LEGAL.custodyMinutes, done: 0, scale: BALANCE.clockMinutesPerSecond, needs: { fun: -15, social: -10, hygiene: -10 }, appliedFrac: 0,
     reward: 0, skillXp: {}, careerXp: 0, cost: 0, startedAt: d.minutes,
   }
   toast('🚓 You have been arrested!', 'bad')
@@ -1143,7 +1194,7 @@ function sendToJail(d: GameState, days: number, reason: string) {
   enterPlace(d, 'police')
   d.activity = {
     uid: d.nextId++, defId: 'jail', label: `Serving ${days} days in prison`, icon: '⛓️', kind: 'jail', ctx: { dest: 'police' },
-    total: days * 1440, done: 0, scale: LEGAL.jailScale, needs: { fun: -25, social: -20, hygiene: -20, energy: 20, hunger: 20 }, appliedFrac: 0,
+    total: days * 1440, done: 0, scale: BALANCE.clockMinutesPerSecond, needs: { fun: -25, social: -20, hygiene: -20, energy: 20, hunger: 20 }, appliedFrac: 0,
     reward: 0, skillXp: {}, careerXp: 0, cost: 0, startedAt: d.minutes,
   }
   if (days >= 2 && d.employment) {
@@ -1158,7 +1209,7 @@ function remand(d: GameState) {
   enterPlace(d, 'police')
   d.activity = {
     uid: d.nextId++, defId: 'remand', label: 'On remand awaiting trial', icon: '⛓️', kind: 'jail', ctx: { dest: 'police' },
-    total: LEGAL.courtDays * 1440, done: 0, scale: LEGAL.jailScale, needs: { fun: -20, social: -15, hygiene: -15, energy: 15, hunger: 15 }, appliedFrac: 0,
+    total: LEGAL.courtDays * 1440, done: 0, scale: BALANCE.clockMinutesPerSecond, needs: { fun: -20, social: -15, hygiene: -15, energy: 15, hunger: 15 }, appliedFrac: 0,
     reward: 0, skillXp: {}, careerXp: 0, cost: 0, startedAt: d.minutes,
   }
 }
@@ -1169,7 +1220,7 @@ function hospitalize(d: GameState, why: string) {
   enterPlace(d, 'hospital')
   d.activity = {
     uid: d.nextId++, defId: 'ward', label: 'Admitted at Korle Bu', icon: '🏥', kind: 'hospital', ctx: { dest: 'hospital' },
-    total: 1440, done: 0, scale: 240, needs: { energy: 60, hunger: 30, hygiene: 30, fun: -10 }, appliedFrac: 0,
+    total: 1440, done: 0, scale: BALANCE.clockMinutesPerSecond, needs: { energy: 60, hunger: 30, hygiene: 30, fun: -10 }, appliedFrac: 0,
     reward: 0, skillXp: {}, careerXp: 0, cost: bill, startedAt: d.minutes, effect: 'ward',
   }
   toast(`🏥 ${why} You were admitted to Korle Bu (${formatMoney(bill)}).`, 'bad')
@@ -1219,7 +1270,7 @@ function startTrip(d: GameState) {
   runtime.ride = { mode: v.ride, path, driver: true }
   d.activity = {
     uid: d.nextId++, defId: `drive:${v.id}`, label: `${v.emoji} Passenger to ${to.name}`, icon: v.emoji, kind: 'travel', ctx: { ride: v.ride, drive: true },
-    total: minutes, done: 0, scale: minutes / Math.min(16, Math.max(6, len / 6.5)), needs: { energy: -5, fun: 2, social: 3 },
+    total: minutes, done: 0, scale: BALANCE.clockMinutesPerSecond, needs: { energy: -5, fun: 2, social: 3 },
     appliedFrac: 0, reward: fare, skillXp: { communication: 2 }, careerXp: 0, cost: 0, travelTo: to.id, startedAt: d.minutes,
   }
   cancelPath()
@@ -1694,7 +1745,7 @@ function timeEffects(d: GameState, prev: number) {
   if (!d.activity && d.needs.energy <= 0) {
     d.activity = {
       uid: d.nextId++, defId: 'collapse', label: 'Passed out from exhaustion', icon: '😵', kind: 'collapse', ctx: {},
-      total: BALANCE.collapse.minutes, done: 0, scale: BALANCE.sleepMinutesPerSecond, needs: { energy: BALANCE.collapse.energyRestored, hunger: -10 },
+      total: BALANCE.collapse.minutes, done: 0, scale: BALANCE.clockMinutesPerSecond, needs: { energy: BALANCE.collapse.energyRestored, hunger: -10 },
       appliedFrac: 0, reward: 0, skillXp: {}, careerXp: 0, cost: 0, startedAt: now,
     }
     cancelPath()
@@ -1737,7 +1788,7 @@ function applyEffect(d: GameState, eff: EventEffect, npcFallback?: string): stri
   if (eff.needs) applyNeeds(d, eff.needs)
   if (eff.skillXp) for (const [k, v] of Object.entries(eff.skillXp) as [SkillId, number][]) addXp(d, k, v)
   if (eff.friendship) addFriendship(d, eff.friendship.npc, eff.friendship.pts)
-  if (eff.minutes) advance(d, eff.minutes)
+  if (eff.minutes) spendTime(d, eff.minutes)
   void npcFallback
   return lines
 }
@@ -1782,17 +1833,20 @@ export const useGame = create<GameState>((set, get) => ({
     runtime.cam.zoom = defaultZoom()
     // a new life starts at home, inside your own room
     set({ ...g, screen: 'game', nearDest: home.id, view: 'home', viewing: null, insideDest: null })
-    useUI.setState({ panel: 'none', selectedDest: null, editMode: false, holdingUid: null, dialog: null, paused: false, trackedDest: null, toasts: [], inbox: [], unread: 0 })
+    useUI.setState({ panel: 'none', selectedDest: null, editMode: false, holdingUid: null, dialog: null, trackedDest: null, toasts: [], inbox: [], unread: 0 })
     const where = AREA_BY_ID[home.area]?.name ?? 'Accra'
     toast(`Akwaaba to ${where}, ${profile.name}! ${start.lifestyle === 'dadaba' ? 'Your parents set you up nicely.' : start.lifestyle === 'hustler' ? 'Time to hustle.' : ''} Follow the objective to get started.`, 'good')
   },
 
   loadFromSave: (saved) => {
-    teleport(saved.player.x, saved.player.z)
-    set({ ...saved, screen: 'game', nearDest: null })
-    useUI.setState({ panel: saved.view === 'home' ? 'home' : saved.view === 'inside' ? 'building' : 'none', selectedDest: saved.view === 'inside' ? saved.insideDest : null, editMode: false, holdingUid: null, dialog: null, paused: false, trackedDest: null, toasts: [] })
+    const g = { ...saved }
+    const away = catchUpToWorld(g)
+    teleport(g.player.x, g.player.z)
+    set({ ...g, screen: 'game', nearDest: null })
+    useUI.setState({ panel: saved.view === 'home' ? 'home' : saved.view === 'inside' ? 'building' : 'none', selectedDest: saved.view === 'inside' ? saved.insideDest : null, editMode: false, holdingUid: null, dialog: null, trackedDest: null, toasts: [] })
     get().syncPlayer()
-    toast('Welcome back! Your progress was restored.', 'good')
+    const busy = g.activity && !g.activity.shift ? ` ${g.activity.label} carried on while you were away.` : ''
+    toast(away >= 60 ? `Welcome back! Accra kept moving for ${formatAway(away)}. Your bills waited for you.${busy}` : 'Welcome back! Your progress was restored.', 'good')
   },
 
   toMenu: () => {
@@ -1877,29 +1931,32 @@ export const useGame = create<GameState>((set, get) => ({
     }
   },
 
-  tick: (dt) => {
+  tick: () => {
     const s0 = get()
     if (s0.screen !== 'game') return
-    const ui = useUI.getState()
-    if (ui.paused || ui.panel === 'settings' || s0.event || ui.dialog) return
+    const now = worldMinutes()
+    if (now <= s0.minutes) return
     const d = draft(s0)
+    // a long gap (hidden tab, sleeping laptop) counts as time away, not time lived
+    if (now - d.minutes > BALANCE.awayAfterMinutes) catchUpToWorld(d, now)
     const prev = d.minutes
+    const step = now - d.minutes
+    let used = 0
     if (d.activity) {
       const a = { ...d.activity }
       // rides wait at red lights: the trip pauses but the clock keeps running
       const held = a.kind === 'travel' && !!runtime.ride?.holding
-      const add = held ? 0 : Math.min(a.total - a.done, dt * a.scale)
-      if (held) advance(d, dt * BALANCE.clockMinutesPerSecond)
-      a.done += add
+      used = held ? 0 : Math.min(a.total - a.done, step)
+      a.done += used
       const frac = a.done / a.total
       applyNeeds(d, a.needs, frac - a.appliedFrac)
       a.appliedFrac = frac
-      d.minutes += add
+      d.minutes += used
       d.activity = a.shift ? stepShift(d, a) : a
       if (d.activity && d.activity.done >= d.activity.total - 1e-6) finishActivity(d)
-    } else {
-      advance(d, dt * BALANCE.clockMinutesPerSecond)
     }
+    // the rest of the step is ordinary time passing (idle, walking, waiting at a light)
+    if (step > used) advance(d, step - used)
     timeEffects(d, prev)
     set(d)
   },
@@ -2227,7 +2284,7 @@ export const useGame = create<GameState>((set, get) => ({
         const bed = home ? itemsInHome(d.housing.tier, d.inventory).find((it) => isBed(it.type)) : undefined
         d.activity = {
           uid: d.nextId++, defId: 'intimate', label: `Night with ${d.hookup.name}`, icon: '💞', kind: 'date', ctx: home ? (bed ? { furnitureUid: bed.id } : {}) : { dest: 'guesthouse_osu' },
-          total: 240, done: 0, scale: 60, needs: { fun: 40, social: 35, energy: -15, hygiene: -10 }, appliedFrac: 0,
+          total: 240, done: 0, scale: BALANCE.clockMinutesPerSecond, needs: { fun: 40, social: 35, energy: -15, hygiene: -10 }, appliedFrac: 0,
           reward: 0, skillXp: {}, careerXp: 0, cost: 0, startedAt: d.minutes, effect: 'intimate',
         }
       } else if (eff.custom === 'stop_fine') {
@@ -2246,7 +2303,7 @@ export const useGame = create<GameState>((set, get) => ({
         if (legal) lines.push('✅ Papers in order. Have a nice day.')
         else { spend(d, Math.min(d.money, 150), 'Traffic fine', 'fee'); lines.push(`🧾 ${d.drive?.vehicle === 'okada' ? 'Commercial okada is banned.' : 'No licence.'} Fined GH₵150.`) }
       } else if (eff.custom === 'cp_argue') {
-        advance(d, 40)
+        spendTime(d, 40)
         if (Math.random() < 0.5) { spend(d, Math.min(d.money, 100), 'Traffic fine', 'fee'); lines.push('🧾 Arguing cost you 40 minutes and GH₵100.') }
         else lines.push('🗣️ After 40 minutes of arguing, they let you go.')
       } else if (eff.custom === 'partner_love' && d.romance.partner) {
@@ -2277,7 +2334,7 @@ export const useGame = create<GameState>((set, get) => ({
       d.activity = {
         uid: d.nextId++, defId: `${ac.look ?? 'event'}:${def.id}`, label: ac.label, icon: ac.icon, kind: 'event',
         ctx: ac.dest ? { dest: ac.dest, npc: ac.npc } : {},
-        total: ac.minutes, done: 0, scale: BALANCE.activityMinutesPerSecond, needs: ac.needs ?? {}, appliedFrac: 0,
+        total: ac.minutes, done: 0, scale: BALANCE.clockMinutesPerSecond, needs: ac.needs ?? {}, appliedFrac: 0,
         reward: ac.reward ?? 0, skillXp: ac.skillXp ?? {}, careerXp: 0, cost: 0, startedAt: d.minutes,
       }
       cancelPath()
@@ -2316,7 +2373,7 @@ export const useGame = create<GameState>((set, get) => ({
     addFriendship(d, npc.id, choice.friendship)
     if (choice.needs) applyNeeds(d, choice.needs)
     d.needs.social = clamp(d.needs.social + 4)
-    advance(d, 20)
+    spendTime(d, 20)
     d.stats.conversations++
     set(d)
     useUI.setState({ dialog: { ...dlg, phase: 'reply', reply: choice.reply, gained: Math.round((d.friendships[npc.id].points - before) * 10) / 10 } })
@@ -2550,16 +2607,12 @@ export const useGame = create<GameState>((set, get) => ({
     spend(d, q.fare, mode === 'own' ? `Fuel to ${to.name}` : `${RIDES[mode].name} to ${to.name}`, 'transport')
     d.activity = {
       uid: d.nextId++, defId: `ride:${mode}`, label: mode === 'own' ? `Driving to ${to.name}` : `${RIDES[mode].name} to ${to.name}`, icon: mode === 'own' ? VEHICLES[own!].emoji : RIDES[mode].emoji, kind: 'travel', ctx: { ride: mode, ...(mode === 'own' ? { drive: true } : {}) },
-      total: q.minutes + extra, done: 0, scale: BALANCE.travelMinutesPerSecond, needs: mode === 'ride' ? { fun: 4 } : mode === 'trotro' ? { social: 4, hygiene: -3 } : { social: 2 },
+      total: q.minutes + extra, done: 0, scale: BALANCE.clockMinutesPerSecond, needs: mode === 'ride' ? { fun: 4 } : mode === 'trotro' ? { social: 4, hygiene: -3 } : { social: 2 },
       appliedFrac: 0, reward: 0, skillXp: {}, careerXp: 0, cost: q.fare, travelTo: destId, startedAt: d.minutes, meta: { note },
     }
     const path = roadRoute(d.player.x, d.player.z, to.door.x, to.door.z)
+    // the trip takes its quoted time on the shared clock; you watch the city go by
     runtime.ride = { mode, path, ...(mode === 'own' ? { driver: true } : {}) }
-    // ride in real time so you can watch the city go by
-    let len = 0
-    for (let i = 1; i < path.length; i++) len += Math.hypot(path[i].x - path[i - 1].x, path[i].z - path[i - 1].z)
-    const secs = Math.min(18, Math.max(5, len / (mode === 'trotro' ? 5 : 6.5)))
-    d.activity!.scale = d.activity!.total / secs
     cancelPath()
     set(d)
     useUI.setState({ panel: 'none', selectedDest: null, travelTo: null })

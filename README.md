@@ -4,8 +4,17 @@ A browser life-sim set in a stylized low-poly Accra, Ghana: 16 neighbourhoods fr
 
 ```bash
 npm install
-npm run dev    # http://localhost:3000
+cp .env.example .env.local   # fill in DATABASE_URL, BETTER_AUTH_SECRET, ABLY_API_KEY
+npm run db:migrate           # Better Auth tables + game saves
+npm run dev                  # http://localhost:3000
 ```
+
+## Online play
+- **Accounts:** [Better Auth](https://better-auth.com) with username + password on one form (a new username creates the account). Sign-up needs an email under the hood, so the client sends a hidden `@players.city-stories.invalid` placeholder.
+- **Cloud saves:** `/api/save` stores each player's life as `jsonb` in Postgres (Neon). Autosaves every 30 s, after every result and when the tab hides.
+- **One shared clock:** `src/game/clock.ts` derives game time from the server clock (`/api/time`) and `BALANCE.worldEpoch`, at 1 game minute per real second for everyone. Nothing pauses or skips time: shifts, sleep and rides take real minutes.
+- **Time away:** whatever you were doing (sleep, a trip, jail) finishes while you are offline; everything else is frozen. Needs do not drain and deadlines (rent, loans, court, permits) move later by the time you missed (`catchUpToWorld` in `store.ts`). A tab hidden for over 2 game hours counts as away.
+- **Live presence:** Ably presence on `accra:presence`. `/api/ably-token` issues tokens limited to that channel, with the player's account id as `clientId`.
 
 ## Controls
 - Tap / click the ground to walk (A* pathfinding), or use WASD / arrows
