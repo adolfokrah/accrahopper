@@ -31,7 +31,7 @@ export const TASKS: TaskDef[] = [
   { id: 'shower', text: 'Take a shower', icon: '🚿', keys: ['act:h_shower', 'act:washshower', 'act:gymshower'], target: 1, reward: 10 },
   { id: 'park', text: 'Visit Kwame Nkrumah Memorial Park', icon: '🗿', keys: ['dest:park'], target: 1, reward: 25 },
   { id: 'momo', text: 'Send MoMo to a friend', icon: '📲', keys: ['momo'], target: 1, reward: 15 },
-  { id: 'text', text: 'Text friends on your phone', icon: '✉️', keys: ['text'], target: 2, reward: 10 },
+  { id: 'text', text: 'Text players on your phone', icon: '✉️', keys: ['text'], target: 2, reward: 10 },
   { id: 'date', text: 'Go on a date', icon: '💕', keys: ['act:date'], target: 1, reward: 40, req: 'dating' },
   { id: 'jamestown', text: 'Visit Jamestown', icon: '🗼', keys: ['dest:jamestown'], target: 1, reward: 25 },
   { id: 'movie', text: 'Catch a movie at Accra Mall', icon: '🎬', keys: ['act:cinema'], target: 1, reward: 25 },

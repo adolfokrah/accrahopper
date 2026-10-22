@@ -106,8 +106,6 @@ interface UIState {
   viewKey: number
   /** 'lost' while the GPU context is gone and we are trying to restore it. */
   gfx: 'ok' | 'lost'
-  /** Someone is typing in a chat thread. */
-  chatTyping: { chat: string; who: string } | null
   settings: Settings
   dialog: DialogState | null
   // furniture / home editing
@@ -166,7 +164,6 @@ export const useUI = create<UIState>((set, get) => ({
   webgl: 'unknown',
   viewKey: 0,
   gfx: 'ok',
-  chatTyping: null,
   settings: DEFAULT_SETTINGS,
   dialog: null,
   editMode: false,

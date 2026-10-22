@@ -5,7 +5,7 @@ import { friendIndex, friendName, friendPoints, isOpen, levelFromXp } from '@/ga
 import { BALANCE, GAME_CONFIG, dayOf, formatClock, formatMoney, hourOf } from '@/game/config'
 import { AREAS, AREA_BY_ID, CAREERS, CAREER_IDS, DESTINATIONS, DEST_BY_ID, HOMES, NPCS, SKILLS } from '@/game/content'
 import { walkToDest } from '@/game/nav'
-import { QUICK_MESSAGES, canRentOut, cleanCash, launderCap, loanLimit, missingRequirements, rentOutRange, useGame } from '@/game/store'
+import { canRentOut, cleanCash, launderCap, loanLimit, missingRequirements, rentOutRange, useGame } from '@/game/store'
 import { LAUNDER, BIZ, HOME_SELL_BACK, SELL_BACK, PROJECTS, projectStages, BUSINESSES, BUSINESS_BY_ID, DRIVING, FINANCE, LOAN, PLOTS, STOCKS, VEHICLES, WORK_VEHICLES, homeDestId } from '@/game/content'
 import { plotValue } from '@/game/property'
 import { GOALS, TASK_BY_ID, taskProgress } from '@/game/life'
@@ -102,7 +102,7 @@ function HomeScreen() {
   const housing = useGame((s) => s.housing)
   const unread = useUI((s) => s.unread)
   const requests = useSocial((s) => s.friends.filter((f) => f.status === 'received').length)
-  const chatUnread = useGame((s) => Object.values(s.chatUnread).reduce((a, b) => a + b, 0)) + useSocial((s) => s.unread)
+  const chatUnread = useSocial((s) => s.unread)
   const h = hourOf(minutes)
   const night = h < 6 || h >= 19
   const rentIn = Math.max(0, housing.nextRentDue - minutes)
@@ -648,86 +648,6 @@ function QuickLoan() {
 
 const GROUP_EMOJIS = ['👥', '🇬🇭', '🎉', '⚽', '💼', '🍛']
 
-function ChatComposer({ thread, isDirect }: { thread: string; isDirect: boolean }) {
-  const [text, setText] = useState('')
-  const send = (t: string) => {
-    if (!t.trim()) return
-    sfx('click')
-    useGame.getState().sendChat(thread, t)
-    setText('')
-  }
-  return (
-    <div className="wa-foot">
-      <div className="wa-quick">
-        {QUICK_MESSAGES.map((q) => (
-          <button key={q} className="ios-chip" onClick={() => send(q)}>{q}</button>
-        ))}
-        {isDirect && <button className="ios-chip amount" onClick={() => useUI.setState({ phoneTab: 'wallet', momoTo: thread })}>💸 Send MoMo</button>}
-      </div>
-      <form className="wa-input" onSubmit={(e) => { e.preventDefault(); send(text) }}>
-        <input value={text} maxLength={200} placeholder="Message" onChange={(e) => setText(e.target.value)} aria-label="Type a message" />
-        <button type="submit" className="wa-send" disabled={!text.trim()} aria-label="Send">➤</button>
-      </form>
-    </div>
-  )
-}
-
-function NewGroup({ friends, onDone }: { friends: typeof NPCS; onDone: (id: string | null) => void }) {
-  const [name, setName] = useState('')
-  const [emoji, setEmoji] = useState(GROUP_EMOJIS[0])
-  const [picked, setPicked] = useState<string[]>([])
-  const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
-  return (
-    <AppShell title="New group" back="Chats" onBack={() => onDone(null)}>
-      <Group header="Group name">
-        <div className="wa-field">
-          <input value={name} maxLength={30} placeholder="e.g. Osu Weekend Crew" onChange={(e) => setName(e.target.value)} aria-label="Group name" />
-        </div>
-        <div className="wa-emojis">
-          {GROUP_EMOJIS.map((e) => (
-            <button key={e} className={`wa-emoji ${emoji === e ? 'on' : ''}`} onClick={() => setEmoji(e)} aria-label={`Icon ${e}`}>{e}</button>
-          ))}
-        </div>
-      </Group>
-      <Group header={`Add friends (${picked.length})`} footer={friends.length ? undefined : 'Make friends around Accra first. Chat with people in person to add them.'}>
-        {friends.map((n) => (
-          <Row key={n.id} icon={n.emoji} iconBg="#f2f2f7" title={n.name} sub={n.role} detail={<span className={`wa-check ${picked.includes(n.id) ? 'on' : ''}`}>{picked.includes(n.id) ? '✓' : ''}</span>} onClick={() => toggle(n.id)} />
-        ))}
-      </Group>
-      <div className="wa-actions">
-        <button className="wa-create" disabled={!name.trim() || !picked.length} onClick={() => { sfx('success'); onDone(useGame.getState().createGroup(name, emoji, picked)) }}>Create group</button>
-      </div>
-    </AppShell>
-  )
-}
-
-function GroupInfo({ groupId, friends, onBack, onLeft }: { groupId: string; friends: typeof NPCS; onBack: () => void; onLeft: () => void }) {
-  const g = useGame((s) => s.groups[groupId])
-  if (!g) return null
-  const others = friends.filter((n) => !g.members.includes(n.id))
-  return (
-    <AppShell title={`${g.emoji} ${g.name}`} back="Chat" onBack={onBack}>
-      <Group header={`${g.members.length + 1} participants`}>
-        <Row icon="🙂" iconBg="#d9fdd3" title="You" detail={<small className="muted-t">Admin</small>} />
-        {g.members.map((m) => {
-          const n = NPCS.find((x) => x.id === m)
-          return n ? <Row key={m} icon={n.emoji} iconBg="#f2f2f7" title={n.name} sub={n.role} /> : null
-        })}
-      </Group>
-      {others.length > 0 && (
-        <Group header="Add participants">
-          {others.map((n) => (
-            <Row key={n.id} icon={n.emoji} iconBg="#f2f2f7" title={n.name} sub={n.role} detail={<span className="wa-add">＋</span>} onClick={() => { sfx('click'); useGame.getState().addToGroup(groupId, n.id) }} />
-          ))}
-        </Group>
-      )}
-      <Group>
-        <Row icon="🚪" iconBg="#ffe5e5" title="Exit group" tone="red" onClick={() => { useGame.getState().leaveGroup(groupId); onLeft() }} />
-      </Group>
-    </AppShell>
-  )
-}
-
 /** Real players in Contacts: friend requests and friends (online or not; never where they are). */
 function PlayerContacts() {
   const friends = useSocial((s) => s.friends)
@@ -822,96 +742,21 @@ function PlayerThread({ id }: { id: string }) {
   )
 }
 
+/** Chats with real players only: talk out loud to people nearby, or message players directly. */
 function Chat() {
   const pthread = useSocial((p) => p.thread)
   const convos = useSocial((p) => p.conversations)
   const live = useAccount((a) => a.live)
   useEffect(() => { void loadConversations() }, [])
-  const s = useGame()
-  const typing = useUI((u) => u.chatTyping)
-  const [thread, setThread] = useState<string | null>(null)
-  const [screen, setScreen] = useState<'list' | 'new' | 'info'>('list')
-  const squad = NPCS.filter((n) => friendPoints(s, n.id) >= 15)
-  const people = NPCS.filter((n) => !!s.friendships[n.id] || s.romance.partner === n.id)
-  const groups = Object.values(s.groups)
-  const last = (id: string) => (s.chats[id] ?? []).slice(-1)[0]
-  const bodyRef = useRef<HTMLDivElement>(null)
-  const msgCount = thread ? (s.chats[thread] ?? []).length : 0
-  useEffect(() => {
-    if (thread && (s.chatUnread[thread] ?? 0) > 0) useGame.getState().readChat(thread)
-  }, [thread, s.chatUnread])
-  useEffect(() => {
-    const el = bodyRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [thread, msgCount, typing])
-  useEffect(() => {
-    if (thread && thread !== 'squad' && !s.groups[thread] && !NPCS.some((n) => n.id === thread)) setThread(null)
-  }, [thread, s.groups])
-
   if (pthread) return <PlayerThread id={pthread} />
-  if (screen === 'new') return <NewGroup friends={people} onDone={(id) => { setScreen('list'); if (id) setThread(id) }} />
-  if (screen === 'info' && thread && s.groups[thread]) return <GroupInfo groupId={thread} friends={people} onBack={() => setScreen('list')} onLeft={() => { setThread(null); setScreen('list') }} />
-
-  if (thread) {
-    const grp = s.groups[thread]
-    const isSquad = thread === 'squad'
-    const npc = isSquad || grp ? null : NPCS.find((n) => n.id === thread)
-    const isGroup = isSquad || !!grp
-    const msgs = s.chats[thread] ?? []
-    const memberNames = (ids: string[]) => ids.map((id) => NPCS.find((n) => n.id === id)?.name.split(' ').slice(-1)[0]).filter(Boolean).join(', ')
-    const typingName = typing && typing.chat === thread ? NPCS.find((n) => n.id === typing.who)?.name : null
-    const sub = typingName ? (isGroup ? `${typingName} is typing…` : 'typing…') : isSquad ? memberNames(squad.map((n) => n.id)) : grp ? `You, ${memberNames(grp.members)}` : 'online'
-    return (
-      <div className="ios-app-view wa">
-        <div className="wa-head">
-          <button className="ios-back" onClick={() => setThread(null)} aria-label="Back to chats">‹</button>
-          <button className="wa-head-btn" onClick={() => grp && setScreen('info')} disabled={!grp}>
-            <span className="avatar-sm">{isSquad ? '🇬🇭' : grp ? grp.emoji : npc?.emoji}</span>
-            <div><b>{isSquad ? 'Accra Squad' : grp ? grp.name : npc?.name}</b><small className={typingName ? 'wa-typing' : ''}>{sub}</small></div>
-          </button>
-        </div>
-        <div className="wa-body" ref={bodyRef}>
-          {msgs.length === 0 && <div className="ios-stamp">Say hello 👋</div>}
-          {msgs.map((m) => {
-            if (m.from === 'system') return <div key={m.id} className="wa-sys">{m.text}</div>
-            const mine = m.from === 'me'
-            const who = NPCS.find((n) => n.id === m.from)
-            return (
-              <div key={m.id} className={`wa-msg ${mine ? 'me' : ''}`}>
-                {isGroup && !mine && <b className="wa-from">{who?.name}</b>}
-                {m.text}
-                <small>{formatClock(m.at)}</small>
-              </div>
-            )
-          })}
-          {typingName && <div className="wa-msg wa-dots" aria-label={`${typingName} is typing`}><span /><span /><span /></div>}
-        </div>
-        <ChatComposer thread={thread} isDirect={!isGroup} />
-      </div>
-    )
-  }
   return (
     <AppShell title="Chats">
-      <div className="wa-toolbar">
-        <button className="wa-newgroup" onClick={() => { sfx('click'); setScreen('new') }}>👥 New group</button>
-      </div>
-      <Group header="Players">
+      <Group footer="Chats are with real players only. Tap someone in the city, then 💬 Message.">
         {live && <Row icon="📍" iconBg="#ffe8b3" title="Nearby" sub="Talk out loud to players around you" chevron onClick={() => useSocial.setState({ thread: NEARBY_THREAD })} />}
         {convos.map((c) => (
           <Row key={c.other} icon="🌐" iconBg="#dbeafe" title={c.name} sub={c.last_body} detail={c.unread > 0 ? <span className="wa-badge">{c.unread}</span> : undefined} chevron onClick={() => useSocial.setState({ thread: c.other })} />
         ))}
-        {!convos.length && <Row icon="🌐" iconBg="#e5e5ea" title={<span className="muted-t">No player chats yet</span>} sub="Tap a player in the city, then 💬 Message" />}
-      </Group>
-      <Group header="Friends in Accra" footer={people.length ? 'Texting friends keeps you social and grows friendships (once a day each).' : 'Meet people around Accra and chat with them in person to add them here.'}>
-        {squad.length >= 2 && (
-          <Row icon="🇬🇭" iconBg="#25d366" title={<>Accra Squad <small className="muted-t">· group</small></>} sub={last('squad')?.text ?? 'Group chat with your friends'} detail={(s.chatUnread.squad ?? 0) > 0 ? <span className="wa-badge">{s.chatUnread.squad}</span> : undefined} chevron onClick={() => setThread('squad')} />
-        )}
-        {groups.map((g) => (
-          <Row key={g.id} icon={g.emoji} iconBg="#dcf8c6" title={<>{g.name} <small className="muted-t">· group</small></>} sub={last(g.id)?.text ?? `${g.members.length + 1} participants`} detail={(s.chatUnread[g.id] ?? 0) > 0 ? <span className="wa-badge">{s.chatUnread[g.id]}</span> : undefined} chevron onClick={() => setThread(g.id)} />
-        ))}
-        {people.map((n) => (
-          <Row key={n.id} icon={n.emoji} iconBg="#f2f2f7" title={<>{n.name}{s.romance.partner === n.id ? ' 💕' : ''}</>} sub={last(n.id)?.text ?? n.role} detail={(s.chatUnread[n.id] ?? 0) > 0 ? <span className="wa-badge">{s.chatUnread[n.id]}</span> : undefined} chevron onClick={() => setThread(n.id)} />
-        ))}
+        {!convos.length && <Row icon="🌐" iconBg="#e5e5ea" title={<span className="muted-t">No chats yet</span>} sub="Meet players around Accra" />}
       </Group>
     </AppShell>
   )

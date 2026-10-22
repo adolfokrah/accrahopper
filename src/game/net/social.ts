@@ -223,6 +223,7 @@ export async function sendDm(to: string, text: string): Promise<string | null> {
   const r = await api<{ message: DM }>('/api/dm', { method: 'POST', body: JSON.stringify({ to, text }) })
   if (!r.message) return r.error ?? 'Could not send'
   useSocial.setState((s) => ({ threads: { ...s.threads, [to]: [...(s.threads[to] ?? []), r.message] } }))
+  useGame.getState().textedPlayer()
   return null
 }
 

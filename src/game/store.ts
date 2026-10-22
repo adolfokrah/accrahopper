@@ -236,11 +236,8 @@ export interface GameState {
   askOut: (npcId: string) => void
   propose: () => void
   breakUp: () => void
-  sendChat: (chatId: string, text: string) => void
-  readChat: (chatId: string) => void
-  createGroup: (name: string, emoji: string, members: string[]) => string | null
-  addToGroup: (groupId: string, npcId: string) => void
-  leaveGroup: (groupId: string) => void
+  /** You messaged a real player: counts for the texting task and lifts your social need. */
+  textedPlayer: () => void
   sendMomo: (npcId: string, amount: number) => void
   bankMove: (amount: number, dir: 'in' | 'out') => void
   buyTbill: (amount: number) => void
@@ -1143,12 +1140,6 @@ function track(d: GameState, key: string, n = 1) {
   }
 }
 
-function addChat(d: GameState, chatId: string, from: string, text: string, unread = true) {
-  const list = [...(d.chats[chatId] ?? []), { id: d.nextId++, from, text, at: d.minutes }].slice(-50)
-  d.chats = { ...d.chats, [chatId]: list }
-  if (unread && from !== 'me') d.chatUnread = { ...d.chatUnread, [chatId]: (d.chatUnread[chatId] ?? 0) + 1 }
-}
-
 function enterPlace(d: GameState, destId: string) {
   d.view = 'inside'
   d.insideDest = destId
@@ -1278,69 +1269,6 @@ function startTrip(d: GameState) {
   }
   cancelPath()
 }
-
-function squadMembers(d: GameState) {
-  return NPCS.filter((n) => friendPoints(d, n.id) >= 15).map((n) => n.id)
-}
-
-const BANTER = [
-  'Who dey go Labadi this weekend? 🏖️',
-  'Charley the traffic at Circle today 😩',
-  'Ghana jollof > everything. No debate 🍛',
-  'Dumsor again in my area 🕯️',
-  'Who wants kelewele? I am buying 😋',
-  'Black Stars play tonight ⚽🇬🇭',
-  'Payday vibes 💸',
-  'Rain don come, stay safe o 🌧️',
-]
-const REPLIES: Record<number, string[]> = {
-  0: ['I dey o! You? 😄', 'Fine fine. How far?', 'Hey hey! 👋'],
-  1: ['Sure! Where?', 'Let’s do Labadi 🏖️', 'If you’re buying 😂'],
-  2: ['Come out then! 😄', 'Go and dance small 💃', 'Me too o'],
-  3: ['Anytime! 🙏', 'You are welcome 💛', 'Ah, it’s nothing'],
-  4: ['😂😂😂', 'Stop it 🤣', 'You dey craze 😂'],
-  5: ['Good morning! ☀️', 'Morning o, have a blessed day', 'Mornin’ 😴'],
-}
-/** Keyword replies for free-text chat. First match wins. */
-const KEYWORD_REPLIES: [RegExp, string[]][] = [
-  [/\b(thank|thanks|tnx|medaase|medase)\b/i, ['Anytime! 🙏', 'You are welcome 💛', 'No wahala 👊🏾']],
-  [/how (are|r) (you|u)|how far|how body|wassup|what'?s up/i, ['I dey fine o, you? 😄', 'By His grace 🙏 You?', 'Chilling small. You?']],
-  [/where (are|r) (you|u)|wya|where you dey/i, ['I dey house 🏠', 'Stuck in traffic at Circle 😩', 'At work. Talk later?']],
-  [/\b(hi|hello|hey|yo|hiya|morning|evening|afternoon)\b/i, ['Hey hey! 👋', 'Chale! How far?', 'Hello o 😄']],
-  [/\b(money|borrow|loan|momo|cash|cedis|pay)\b/i, ['Charley money no dey 😩', 'Hmm, how much? 👀', 'Payday no reach yet o', 'Send me your MoMo, I go check 😂']],
-  [/\b(love|miss|date|cute|babe|baby|darling|kiss)\b/i, ['Awww 🥰', 'Stop making me blush 🙈', 'Haha you dey try 😏']],
-  [/\b(food|chop|eat|hungry|waakye|jollof|kenkey|banku|kelewele|fufu)\b/i, ['Waakye with shito 🤤', 'I am hungry too 😩', 'Let’s go to the chop bar!', 'Ghana jollof is life 🍛']],
-  [/\b(party|club|show|concert|dance|vibe|turn up|night out)\b/i, ['I am in! 🔥', 'Labadi this Friday? 🎶', 'Who is performing? 👀']],
-  [/\b(work|job|boss|shift|office|hustle)\b/i, ['Work is hard o 😮‍💨', 'Hustle no dey stop 💪🏾', 'My boss dey worry me 😂']],
-  [/\b(sad|bored|tired|stress|vex)\b/i, ['Sorry o 🫂', 'Come out, let’s chill', 'Take it easy 🙏']],
-  [/\b(lol|haha|lmao|😂|🤣)/i, ['😂😂😂', 'You dey craze 🤣', 'Stop it 😂']],
-  [/\?\s*$/, ['Hmm, let me think 🤔', 'Maybe o 😄', 'Ask me again later 😂', 'Why do you ask? 👀']],
-]
-const FLIRTY = ['Miss you 💛', 'Thinking about you 😘', 'Come and see me 🥰', 'You make me smile 💕']
-const GENERIC = ['👍', 'Haha okay', 'Sure sure', 'Ehen 😄', 'True talk', 'I hear you 👂🏾']
-
-function chatReply(d: GameState, who: string, text: string): string {
-  const npc = NPC_BY_ID[who]
-  const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)]
-  if (d.romance.partner === who && Math.random() < 0.4) return pick(FLIRTY)
-  const qi = QUICK_MESSAGES.indexOf(text)
-  if (qi >= 0 && REPLIES[qi]) return pick([...REPLIES[qi], ...(Math.random() < 0.2 ? npc?.chat ?? [] : [])])
-  const hit = KEYWORD_REPLIES.find(([re]) => re.test(text))
-  if (hit) return pick(hit[1])
-  return pick([...GENERIC, ...(npc?.chat ?? [])])
-}
-
-/** Members who can answer in a chat thread. */
-function chatMembers(d: GameState, chatId: string): string[] {
-  if (chatId === 'squad') return squadMembers(d)
-  const g = d.groups[chatId]
-  if (g) return g.members
-  return NPC_BY_ID[chatId] ? [chatId] : []
-}
-
-const WELCOME = ['Thanks for adding me 🙌', 'Ei, group chat! 😂', 'Hello everyone 👋', 'Who else is here? 👀']
-
-export const QUICK_MESSAGES = ['Hey! How far? 👋', 'Let’s hang out this weekend', 'I’m bored 😩', 'Thank you for everything 🙏', '😂😂😂', 'Good morning ☀️']
 
 /** Display name for a rent-out key. */
 export function rentOutName(key: string) {
@@ -1658,18 +1586,6 @@ function timeEffects(d: GameState, prev: number) {
   // untreated illness
   if (d.health.illness && !d.activity && now - d.health.since > HEALTH.untreatedDays * 1440) {
     hospitalize(d, `Your ${ILLNESSES[d.health.illness].name.toLowerCase()} got worse.`)
-  }
-  // group chat banter every 6 hours
-  if (Math.floor(now / 360) !== Math.floor(prev / 360)) {
-    const squad = squadMembers(d)
-    if (squad.length >= 2 && Math.random() < 0.6) {
-      const who = squad[Math.floor(Math.random() * squad.length)]
-      addChat(d, 'squad', who, BANTER[Math.floor(Math.random() * BANTER.length)])
-    }
-    for (const g of Object.values(d.groups)) {
-      if (!g.members.length || Math.random() > 0.35) continue
-      addChat(d, g.id, g.members[Math.floor(Math.random() * g.members.length)], BANTER[Math.floor(Math.random() * BANTER.length)])
-    }
   }
   checkGoals(d)
   const h = d.housing
@@ -2683,7 +2599,6 @@ export const useGame = create<GameState>((set, get) => ({
     if (Math.random() < chance) {
       d.romance = { partner: npcId, stage: 'dating', dates: 0, ring: d.romance.ring, askedDay: today }
       showResult(d, `${npc.name} said yes!`, '💕', [`You and ${npc.name} are now dating.`, 'Go on dates at the beach club, beach, mall or park.'], 'good')
-      addChat(d, npcId, npcId, 'I’m so happy you asked 🥰')
     } else {
       addFriendship(d, npcId, -3)
       showResult(d, 'Not this time', '💔', [`${npc.name} wants to stay friends for now.`], 'neutral')
@@ -2723,100 +2638,12 @@ export const useGame = create<GameState>((set, get) => ({
   },
 
   /* -------------------------------- chats -------------------------------- */
-  sendChat: (chatId, raw) => {
-    const text = raw.trim().slice(0, 200)
-    if (!text) return
+  textedPlayer: () => {
     const d = draft(get())
-    const today = dayOf(d.minutes)
-    addChat(d, chatId, 'me', text, false)
-    const members = chatMembers(d, chatId)
-    const isGroup = chatId === 'squad' || !!d.groups[chatId]
-    const responders = isGroup ? [...members].sort(() => Math.random() - 0.5).slice(0, 1 + Math.floor(Math.random() * Math.min(3, members.length))) : members
-    for (const who of responders) {
-      if (d.chatDay[who] !== today) {
-        d.chatDay = { ...d.chatDay, [who]: today }
-        addFriendship(d, who, 1)
-      }
-    }
     d.needs.social = clamp(d.needs.social + 2)
     track(d, 'text')
     set(d)
-    // replies arrive a moment later, one after another, with a typing indicator
-    let delay = 0
-    for (const who of responders) {
-      delay += 800 + Math.random() * 1700
-      const at = delay
-      setTimeout(() => useUI.setState({ chatTyping: { chat: chatId, who } }), Math.max(0, at - 700))
-      setTimeout(() => {
-        const s2 = get()
-        if (s2.screen !== 'game' || !chatMembers(s2, chatId).includes(who)) return
-        const d2 = draft(s2)
-        addChat(d2, chatId, who, chatReply(d2, who, text))
-        set(d2)
-        const t = useUI.getState().chatTyping
-        if (t && t.chat === chatId && t.who === who) useUI.setState({ chatTyping: null })
-      }, at)
-    }
   },
-
-  createGroup: (rawName, emoji, members) => {
-    const name = rawName.trim().slice(0, 30)
-    const s = get()
-    const valid = [...new Set(members)].filter((m) => NPC_BY_ID[m])
-    if (!name) { toast('Give your group a name', 'warn'); return null }
-    if (!valid.length) { toast('Add at least one friend', 'warn'); return null }
-    const d = draft(s)
-    const id = `g${d.nextId++}`
-    d.groups = { ...d.groups, [id]: { id, name, emoji, members: valid, createdAt: d.minutes } }
-    addChat(d, id, 'system', `You created group "${name}"`, false)
-    addChat(d, id, 'system', `You added ${valid.map((m) => NPC_BY_ID[m].name).join(', ')}`, false)
-    set(d)
-    valid.slice(0, 3).forEach((who, i) => {
-      setTimeout(() => {
-        const s2 = get()
-        if (!s2.groups[id]?.members.includes(who)) return
-        const d2 = draft(s2)
-        addChat(d2, id, who, WELCOME[Math.floor(Math.random() * WELCOME.length)])
-        set(d2)
-      }, 900 + i * 1100)
-    })
-    toast(`👥 Group "${name}" created`, 'good')
-    return id
-  },
-
-  addToGroup: (groupId, npcId) => {
-    const s = get()
-    const g = s.groups[groupId]
-    const npc = NPC_BY_ID[npcId]
-    if (!g || !npc || g.members.includes(npcId)) return
-    const d = draft(s)
-    d.groups = { ...d.groups, [groupId]: { ...g, members: [...g.members, npcId] } }
-    addChat(d, groupId, 'system', `You added ${npc.name}`, false)
-    set(d)
-    setTimeout(() => {
-      const s2 = get()
-      if (!s2.groups[groupId]?.members.includes(npcId)) return
-      const d2 = draft(s2)
-      addChat(d2, groupId, npcId, WELCOME[Math.floor(Math.random() * WELCOME.length)])
-      set(d2)
-    }, 1200)
-  },
-
-  leaveGroup: (groupId) => {
-    const s = get()
-    const g = s.groups[groupId]
-    if (!g) return
-    const groups = { ...s.groups }
-    delete groups[groupId]
-    const chats = { ...s.chats }
-    delete chats[groupId]
-    const chatUnread = { ...s.chatUnread }
-    delete chatUnread[groupId]
-    set({ groups, chats, chatUnread })
-    toast(`You left "${g.name}"`, 'info')
-  },
-
-  readChat: (chatId) => set((s) => ({ chatUnread: { ...s.chatUnread, [chatId]: 0 } })),
 
   sendMomo: (npcId, amount) => {
     const s = get()
@@ -2827,8 +2654,6 @@ export const useGame = create<GameState>((set, get) => ({
     const npc = NPC_BY_ID[npcId]
     spend(d, amount, `MoMo to ${npc.name}`, 'transfer')
     if (fee) spend(d, fee, 'E-levy (1%)', 'fee')
-    addChat(d, npcId, 'me', `💸 Sent ${formatMoney(amount)} via MoMo`, false)
-    addChat(d, npcId, npcId, amount >= 100 ? 'Ei! God bless you 🙏🙏' : 'Thank you o 🙏', false)
     const today = dayOf(d.minutes)
     const key = `momo:${npcId}`
     if (d.chatDay[key] !== today) {
