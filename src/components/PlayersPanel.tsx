@@ -108,9 +108,9 @@ function OnlineTab({ ids }: { ids: string[] }) {
   return (
     <>
       <form className="say-row" onSubmit={send}>
-        <input className="text-input" placeholder={view === 'world' ? 'Say something to people nearby…' : 'Step outside to talk to people nearby'} value={text} maxLength={140}
-          onChange={(e) => setText(e.target.value)} disabled={!socialLive() || view !== 'world'} aria-label="Say to nearby players" />
-        <Btn small disabled={!text.trim() || !socialLive() || view !== 'world'}>Say</Btn>
+        <input className="text-input" placeholder={view === 'home' ? 'Step out of your home to talk to people' : view === 'inside' ? 'Say something to people in here…' : 'Say something to people nearby…'} value={text} maxLength={140}
+          onChange={(e) => setText(e.target.value)} disabled={!socialLive() || view === 'home'} aria-label="Say to nearby players" />
+        <Btn small disabled={!text.trim() || !socialLive() || view === 'home'}>Say</Btn>
       </form>
       {nearby.length > 0 && (
         <div className="nearby-log" aria-live="polite">

@@ -12,6 +12,8 @@ export interface PresenceState {
   action?: string | null
   view: 'world' | 'home' | 'inside'
   place?: string | null
+  /** Inside a building: position in room coordinates, height, facing, and pose/prop for the activity. */
+  inside?: { x: number; z: number; y: number; rot: number; pose: string | null; prop: string | null }
   ts: number
 }
 

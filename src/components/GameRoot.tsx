@@ -174,7 +174,7 @@ export default function GameRoot() {
 
   // multiplayer presence: up to 5x/second while moving, plus a heartbeat so idle players stay visible
   useEffect(() => {
-    let last = { x: 0, z: 0, view: '', action: '' as string | null, at: 0 }
+    let last = { key: '', at: 0 }
     const id = setInterval(() => {
       pruneStale()
       const net = getNetAdapter()
@@ -183,10 +183,14 @@ export default function GameRoot() {
       if (!net.online || !selfId || g.screen !== 'game' || !g.profile) return
       const p = runtime.player
       const action = g.activity?.defId ?? null
-      const still = Math.abs(p.x - last.x) < 0.05 && Math.abs(p.z - last.z) < 0.05 && last.view === g.view && last.action === action
-      if (still && Date.now() - last.at < 5000) return
-      last = { x: p.x, z: p.z, view: g.view, action, at: Date.now() }
-      net.publish({ id: selfId, name: g.profile.name, appearance: g.profile.appearance, x: p.x, z: p.z, rot: p.rot, moving: p.moving, action, view: g.view, place: g.insideDest, ts: Date.now() })
+      // inside a building, share where you stand in the room and what you are doing there
+      const ins = g.view === 'inside' ? runtime.inside : null
+      const inside = ins ? { x: ins.x, z: ins.z, y: ins.y, rot: ins.rot, pose: ins.pose, prop: ins.prop } : undefined
+      const moving = ins ? ins.moving : p.moving
+      const key = [g.view, g.insideDest, action, ins ? `${ins.x.toFixed(1)},${ins.z.toFixed(1)},${ins.pose}` : `${p.x.toFixed(1)},${p.z.toFixed(1)}`].join('|')
+      if (key === last.key && Date.now() - last.at < 5000) return
+      last = { key, at: Date.now() }
+      net.publish({ id: selfId, name: g.profile.name, appearance: g.profile.appearance, x: p.x, z: p.z, rot: p.rot, moving, action, view: g.view, place: g.insideDest, inside, ts: Date.now() })
     }, 200)
     return () => clearInterval(id)
   }, [])

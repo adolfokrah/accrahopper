@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { OfflineAdapter, type NetAdapter, type PresenceState } from './presence'
 
 /** Interpolation buffer per remote player (render ~150 ms in the past for smooth motion). */
-interface Snap { t: number; x: number; z: number; rot: number; moving: boolean }
+interface Snap { t: number; x: number; z: number; rot: number; moving: boolean; space: string }
 interface Remote { state: PresenceState; snaps: Snap[]; lastSeen: number }
 
 export const remotes = new Map<string, Remote>()
@@ -32,7 +32,11 @@ export function ingest(states: PresenceState[], selfId: string) {
     }
     r.state = st
     r.lastSeen = now
-    r.snaps.push({ t: now, x: st.x, z: st.z, rot: st.rot, moving: st.moving })
+    // inside a building, positions are room coordinates: a new space starts a fresh track
+    const space = st.view === 'inside' && st.inside ? `in:${st.place}` : st.view
+    const at = space.startsWith('in:') && st.inside ? st.inside : st
+    if (r.snaps.length && r.snaps[r.snaps.length - 1].space !== space) r.snaps = []
+    r.snaps.push({ t: now, x: at.x, z: at.z, rot: at.rot, moving: st.moving, space })
     if (r.snaps.length > 12) r.snaps.splice(0, r.snaps.length - 12)
   }
   syncIds()

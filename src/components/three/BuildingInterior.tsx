@@ -1,9 +1,11 @@
 'use client'
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { DEFAULT_APPEARANCE, DEST_BY_ID, NPC_BY_ID, shiftTaskDef, showOn, type DestKind } from '@/game/content'
 import { dayOf } from '@/game/config'
+import { remotes, sampleRemote, useRemoteIds } from '@/game/net/remotes'
+import { openPlayer, useSocial } from '@/game/net/social'
 import { useGame } from '@/game/store'
 import { useUI } from '@/game/ui'
 import type { ActiveActivity, Appearance } from '@/game/types'
@@ -1006,6 +1008,63 @@ function PartnerNear({ npcId, spot, pose }: { npcId: string; spot: Spot; pose?: 
   )
 }
 
+/** Your spot in the room, for other players in the same place. */
+function shareInside(c: { x: number; z: number; y: number }, rot: number, m: Motion) {
+  const s = runtime.inside
+  s.x = c.x
+  s.z = c.z
+  s.y = c.y
+  s.rot = rot
+  s.moving = m.moving
+  s.pose = m.action ?? null
+  s.prop = m.prop ?? null
+}
+
+const MAX_INSIDE = 12
+
+/** Other online players in this same place, drawn where they stand and doing what they do. */
+function RemotesInside({ destId }: { destId: string }) {
+  const ids = useRemoteIds((s) => s.ids)
+  const here = ids.filter((id) => {
+    const st = remotes.get(id)?.state
+    return st?.view === 'inside' && st.place === destId && !!st.inside
+  }).slice(0, MAX_INSIDE)
+  // membership changes come with presence updates; re-check a few times a second
+  const [, bump] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => bump((v) => v + 1), 500)
+    return () => clearInterval(t)
+  }, [])
+  return <>{here.map((id) => <RemoteInside key={id} id={id} />)}</>
+}
+
+function RemoteInside({ id }: { id: string }) {
+  const g = useRef<THREE.Group>(null)
+  const motion = useRef<Motion>({ moving: false, speed: 0, action: null, prop: null })
+  const tmp = useRef({ x: 0, z: 0, rot: 0, moving: false })
+  const st = remotes.get(id)?.state
+  const bubble = useSocial((s) => s.bubbles[id] ?? '')
+  const tap = useCallback(() => openPlayer(id), [id])
+  useFrame(() => {
+    const grp = g.current
+    const cur = remotes.get(id)?.state
+    if (!grp || !cur?.inside || !sampleRemote(id, tmp.current)) return
+    grp.position.set(tmp.current.x, 0.12 + (tmp.current.moving ? 0 : cur.inside.y), tmp.current.z)
+    grp.rotation.y = tmp.current.rot
+    motion.current = tmp.current.moving
+      ? { moving: true, speed: 2.6, action: null, prop: null }
+      : { moving: false, speed: 0, action: (cur.inside.pose as Pose | null) ?? null, prop: (cur.inside.prop as Prop | null) ?? null }
+  })
+  if (!st) return null
+  return (
+    <group ref={g} position={[st.inside?.x ?? 0, 0.12, st.inside?.z ?? 0]}>
+      <Character appearance={st.appearance ?? DEFAULT_APPEARANCE} lite getMotion={() => motion.current} />
+      <Label id={`inside-remote-${id}`} y={1.85} cls="remote-tag" text={`🌐 ${st.name}`} onTap={tap} />
+      <Label id={`inside-bubble-${id}`} y={2.35} cls="chat-bubble" text={bubble} />
+    </group>
+  )
+}
+
 export function BuildingInterior({ visible }: { visible: boolean }) {
   const destId = useGame((s) => s.insideDest)
   const dest = destId ? DEST_BY_ID[destId] : null
@@ -1086,6 +1145,7 @@ function Room({ destId, layout }: { destId: string; layout: Layout }) {
       } else motion.current = { moving: false, speed: 0, action: null, prop: null }
       c.y += (0 - c.y) * Math.min(1, dt * 10)
       g.position.set(c.x, 0.12 + c.y, c.z)
+      shareInside(c, g.rotation.y, motion.current)
       actionFocus.active = false
       actionFocus.x = INSIDE_ORIGIN.x + c.x
       actionFocus.z = INSIDE_ORIGIN.z + c.z
@@ -1111,6 +1171,7 @@ function Room({ destId, layout }: { destId: string; layout: Layout }) {
       motion.current = { moving: false, speed: 0, action: pose, prop }
     }
     g.position.set(c.x, 0.12 + c.y, c.z)
+    shareInside(c, g.rotation.y, motion.current)
     // staff turns to chat
     if (staffRef.current) {
       const r = sp.rot ?? 0
@@ -1198,6 +1259,7 @@ function Room({ destId, layout }: { destId: string; layout: Layout }) {
       {(activity?.kind === 'date' || activity?.kind === 'event') && activity.ctx.npc && NPC_BY_ID[activity.ctx.npc] && (
         <PartnerNear npcId={activity.ctx.npc} spot={spotFor(layout, activity)} pose={activity.kind === 'event' ? lookFor(activity)?.pose : undefined} />
       )}
+      <RemotesInside destId={destId} />
       <group ref={player}>
         <Character appearance={profile?.appearance ?? DEFAULT_APPEARANCE} getMotion={() => motion.current} />
         {hookup && activity?.defId === 'intimate' && (

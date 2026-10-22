@@ -74,10 +74,13 @@ function showBubble(id: string, text: string) {
   }), BUBBLE_MS))
 }
 
+/** Outdoors: within HEARING_RANGE tiles. Indoors: anyone in the same place. Never across homes. */
 function inEarshot(id: string) {
   const r = remotes.get(id)
   const g = useGame.getState()
-  if (!r || g.view !== 'world' || r.state.view !== 'world') return false
+  if (!r) return false
+  if (g.view === 'inside') return r.state.view === 'inside' && r.state.place === g.insideDest
+  if (g.view !== 'world' || r.state.view !== 'world') return false
   return Math.hypot(r.state.x - g.player.x, r.state.z - g.player.z) <= HEARING_RANGE
 }
 
