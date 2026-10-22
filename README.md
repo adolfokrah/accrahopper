@@ -19,7 +19,7 @@ npm run dev                  # http://localhost:3000
 ## Controls
 - Tap / click the ground to walk (A* pathfinding), or use WASD / arrows
 - Tap a building to walk there and go inside; press E at any door to enter or leave
-- Drag to pan, wheel or pinch to zoom, 🎯 finds your character
+- Drag to turn the camera; Space + drag, two-finger drag or right-drag to pan; wheel or pinch to zoom; 🎯 finds your character
 - The 📱 phone has Jobs, Skills, Maps, Wallet, Contacts, Messages, Calendar and Music apps
 - P pauses, Esc closes panels
 

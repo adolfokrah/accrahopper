@@ -48,10 +48,36 @@ function CameraRig() {
     let moved = 0
     let pinch = 0
     let twist: number | null = null
-    let rotating = false
+    let mid: { x: number; y: number } | null = null
+    /** Space + drag, mouse right/middle button or Shift/Alt + drag pans; every other drag orbits the camera. */
+    let panning = false
+    let spaceHeld = false
+    // Space still presses a focused button or types in a field; it only pans over the map
+    const typing = (e: KeyboardEvent) => {
+      const t = e.target
+      return t instanceof HTMLElement && (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(t.tagName) || t.isContentEditable || t.getAttribute('role') === 'button')
+    }
+    const keyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || typing(e)) return
+      e.preventDefault()
+      if (!spaceHeld) {
+        spaceHeld = true
+        el.style.cursor = 'grab'
+      }
+    }
+    const keyUp = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return
+      spaceHeld = false
+      el.style.cursor = ''
+    }
+    const blurKeys = () => { spaceHeld = false; el.style.cursor = '' }
     const dist = () => {
       const [a, b] = [...pointers.values()]
       return Math.hypot(a.x - b.x, a.y - b.y)
+    }
+    const midpoint = () => {
+      const [a, b] = [...pointers.values()]
+      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
     }
     /** Furniture drags and the ride camera own the pointer; the map must not move. */
     const busy = () => {
@@ -101,11 +127,11 @@ function CameraRig() {
     const down = (e: PointerEvent) => {
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
       moved = 0
-      // right/middle button, or Alt/Shift + left: rotate instead of pan
-      rotating = e.pointerType === 'mouse' && (e.button === 1 || e.button === 2 || e.altKey || e.shiftKey)
+      panning = e.pointerType === 'mouse' && (spaceHeld || e.button === 1 || e.button === 2 || e.altKey || e.shiftKey)
       if (pointers.size === 2) {
         pinch = dist()
         twist = null
+        mid = midpoint()
       }
     }
     const move = (e: PointerEvent) => {
@@ -129,19 +155,24 @@ function CameraRig() {
           turnCam(-da)
         }
         twist = ang
+        // two fingers moving together pan the map
+        const m = midpoint()
+        if (mid) panBy(m.x - mid.x, m.y - mid.y)
+        mid = m
         moved = 99
         return
       }
       moved += Math.abs(dx) + Math.abs(dy)
       if (moved <= 6) return
-      if (rotating) turnCam(-dx * 0.008)
-      else panBy(dx, dy)
+      if (panning) panBy(dx, dy)
+      else turnCam(-dx * 0.008)
     }
     const up = (e: PointerEvent) => {
       pointers.delete(e.pointerId)
       pinch = 0
       twist = null
-      if (pointers.size === 0) rotating = false
+      mid = null
+      if (pointers.size === 0) panning = false
     }
     const wheel = (e: WheelEvent) => {
       e.preventDefault()
@@ -173,9 +204,15 @@ function CameraRig() {
     window.addEventListener('pointercancel', up)
     el.addEventListener('wheel', wheel, { passive: false })
     el.addEventListener('contextmenu', ctx)
+    window.addEventListener('keydown', keyDown)
+    window.addEventListener('keyup', keyUp)
+    window.addEventListener('blur', blurKeys)
     el.addEventListener('gesturestart', gstart)
     el.addEventListener('gesturechange', gchange)
     return () => {
+      window.removeEventListener('keydown', keyDown)
+      window.removeEventListener('keyup', keyUp)
+      window.removeEventListener('blur', blurKeys)
       el.removeEventListener('gesturestart', gstart)
       el.removeEventListener('gesturechange', gchange)
       el.removeEventListener('pointerdown', down)

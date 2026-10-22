@@ -101,8 +101,8 @@ kbd {
   background: var(--panel);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.7);
 }
 .card-inner {
@@ -694,8 +694,8 @@ button.pill {
   border-radius: 18px;
   box-shadow: var(--shadow);
   border: 1px solid rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   overflow: hidden;
   animation: slidein 0.22s ease-out;
 }
@@ -1807,13 +1807,13 @@ button.pill {
   display: grid;
   place-items: center;
   padding: 16px 16px env(safe-area-inset-bottom);
-  background: rgba(10, 20, 35, 0.28);
+  background: rgba(10, 20, 35, 0.38);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   animation: phonefade 0.25s ease-out;
 }
 /* the phone itself slides up from the bottom into the middle of the screen */
-.phone-wrap > .iphone {
-  animation: phonein 0.38s cubic-bezier(0.2, 0.9, 0.3, 1.1);
-}
+
 @keyframes phonein {
   from {
     transform: translateY(70vh);
@@ -1822,26 +1822,37 @@ button.pill {
 @keyframes phonefade {
   from {
     background: rgba(10, 20, 35, 0);
+    -webkit-backdrop-filter: blur(0);
+    backdrop-filter: blur(0);
   }
 }
+.phone-stack {
+  position: relative;
+  padding-top: 52px;
+  animation: phonein 0.38s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+/* "✕ Close" pill just above the phone's top-right corner */
 .phone-close {
   position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
+  top: 0;
+  right: 0;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
   border: 0;
-  background: rgba(20, 20, 24, 0.85);
+  background: rgba(22, 30, 44, 0.9);
   color: #fff;
+  font: inherit;
   font-size: 0.9rem;
+  font-weight: 700;
   box-shadow: var(--shadow);
+  cursor: pointer;
   z-index: 3;
 }
 .iphone {
   --ios-bg: #f2f2f7;
   position: relative;
-  height: min(720px, calc(100dvh - 40px));
+  height: min(720px, calc(100dvh - 100px));
   aspect-ratio: 9 / 19.5;
   max-width: 94vw;
   border-radius: 54px;
@@ -2004,8 +2015,8 @@ button.pill {
   color: #fff;
   text-align: left;
   border: 0;
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
 }
 .widget small {
   font-size: 12px;
@@ -2127,8 +2138,8 @@ button.pill {
   padding: 14px 8px;
   border-radius: 32px;
   background: rgba(255, 255, 255, 0.24);
-  backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
 }
 .ios-dock .ios-label {
   display: none;
@@ -2637,7 +2648,7 @@ button.ios-row:active {
     padding: 8px 8px env(safe-area-inset-bottom);
   }
   .iphone {
-    height: min(700px, calc(100dvh - 24px));
+    height: min(700px, calc(100dvh - 72px));
     max-width: 96vw;
     border-radius: 48px;
     padding: 9px;
@@ -2645,9 +2656,8 @@ button.ios-row:active {
   .iphone-screen {
     border-radius: 40px;
   }
-  .phone-close {
-    top: 8px;
-    right: 8px;
+  .phone-stack {
+    padding-top: 46px;
   }
   .hud:has(.phone-wrap) .bottom-nav,
   .hud:has(.phone-wrap) .view-controls,
@@ -5176,4 +5186,64 @@ small.err {
   display: flex;
   gap: 6px;
   flex: none;
+}
+
+/* ======================= detail sheets: bottom sheet everywhere ======================= */
+/* Desktop matches phones: one sheet centred above the tab bar, never a side panel. */
+@media (min-width: 761px) {
+  .hud2 .panel-slot {
+    top: auto;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    bottom: calc(84px + env(safe-area-inset-bottom));
+    width: min(680px, calc(100% - 32px));
+    max-height: min(56vh, calc(100% - 170px));
+  }
+  .hud2 .panel-slot.open {
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+  .hud2 .panel-slot.open > .sheet {
+    max-height: inherit;
+    min-height: 0;
+    border-radius: 26px;
+    animation: sheetup 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.08);
+  }
+  /* the folded place header sits where the sheet would be */
+  .hud2 .panel-slot.min {
+    top: auto;
+    bottom: calc(84px + env(safe-area-inset-bottom));
+    align-items: flex-end;
+  }
+  /* nothing needs to shift sideways for the sheet any more */
+  .hud:has(.panel-slot.open) .view-controls { right: 12px; }
+  .hud:has(.panel-slot.open) .bottom-stack,
+  .hud:has(.panel-slot.open) .bottom-nav { left: 50%; }
+  /* the sheet takes the bottom-centre spot: hide what would sit under it */
+  .hud2:has(.panel-slot.open) .bottom-stack { display: none; }
+}
+@keyframes sheetup {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+}
+/* grab handle on every sheet */
+.hud2 .sheet {
+  position: relative;
+}
+.hud2 .sheet-head {
+  padding-top: 18px;
+}
+.hud2 .sheet-head::before {
+  content: '';
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  width: 40px;
+  height: 4px;
+  margin-left: -20px;
+  border-radius: 4px;
+  background: rgba(31, 45, 69, 0.18);
 }

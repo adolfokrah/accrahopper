@@ -890,32 +890,34 @@ export function PhonePanel() {
   const app = tab === 'home' ? null : tab
   return (
     <div className="phone-wrap" role="dialog" aria-label="Phone" onClick={(e) => { if (e.target === e.currentTarget) closePhone() }}>
-      <div className="iphone">
-        <span className="btn-side power" onClick={closePhone} title="Lock (close phone)" />
-        <span className="btn-side vol1" aria-hidden />
-        <span className="btn-side vol2" aria-hidden />
-        <div className={`iphone-screen ${app ? 'in-app' : ''}`}>
-          <StatusBar dark={!!app} />
-          <div className="iphone-content" key={tab}>
-            {!app && <HomeScreen />}
-            {app === 'jobs' && <Jobs />}
-            {app === 'assets' && <Assets />}
-            {app === 'skills' && <Skills />}
-            {app === 'maps' && <Maps />}
-            {app === 'wallet' && <Wallet />}
-            {app === 'contacts' && <Contacts />}
-            {app === 'messages' && <Messages />}
-            {app === 'calendar' && <Calendar />}
-            {app === 'music' && <Music />}
-            {app === 'chat' && <Chat />}
-            {app === 'bank' && <BankApp />}
-            {app === 'goals' && <Goals />}
-            {app === 'drive' && <DriveApp />}
+      <div className="phone-stack">
+        <button className="phone-close" onClick={closePhone} aria-label="Close phone">✕ Close</button>
+        <div className="iphone">
+          <span className="btn-side power" onClick={closePhone} title="Lock (close phone)" />
+          <span className="btn-side vol1" aria-hidden />
+          <span className="btn-side vol2" aria-hidden />
+          <div className={`iphone-screen ${app ? 'in-app' : ''}`}>
+            <StatusBar dark={!!app} />
+            <div className="iphone-content" key={tab}>
+              {!app && <HomeScreen />}
+              {app === 'jobs' && <Jobs />}
+              {app === 'assets' && <Assets />}
+              {app === 'skills' && <Skills />}
+              {app === 'maps' && <Maps />}
+              {app === 'wallet' && <Wallet />}
+              {app === 'contacts' && <Contacts />}
+              {app === 'messages' && <Messages />}
+              {app === 'calendar' && <Calendar />}
+              {app === 'music' && <Music />}
+              {app === 'chat' && <Chat />}
+              {app === 'bank' && <BankApp />}
+              {app === 'goals' && <Goals />}
+              {app === 'drive' && <DriveApp />}
+            </div>
+            <button className="home-indicator" onClick={() => (app ? goHome() : closePhone())} aria-label={app ? 'Go to home screen' : 'Close phone'} />
           </div>
-          <button className="home-indicator" onClick={() => (app ? goHome() : closePhone())} aria-label={app ? 'Go to home screen' : 'Close phone'} />
         </div>
       </div>
-      <button className="phone-close" onClick={closePhone} aria-label="Close phone">✕</button>
     </div>
   )
 }

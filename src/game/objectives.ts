@@ -24,7 +24,7 @@ export function getObjective(s: GameState): Objective {
     switch (t) {
       case 0: return s.view === 'home'
         ? { ...base, title: 'Step outside', detail: 'You wake up in your room. Tap the green 🚪 Exit mat by the door (or tap World) to go out into Accra.' }
-        : { ...base, title: "Walk to Auntie Esi's Chop Bar", detail: 'Tap the ground to walk, or use WASD. Drag to pan the camera.', destId: 'foodstall' }
+        : { ...base, title: "Walk to Auntie Esi's Chop Bar", detail: 'Tap the ground to walk, or use WASD. Drag to turn the camera.', destId: 'foodstall' }
       case 1: return { ...base, title: 'Buy and eat a meal', detail: 'Go inside, pick a dish and confirm. Kelewele is cheapest.', destId: 'foodstall' }
       case 2: return { ...base, title: 'Apply for a starter job', detail: 'Makola Market is hiring Shop Assistants. No experience needed.', destId: 'market' }
       case 3: return { ...base, title: 'Complete a shift', detail: 'Go to your workplace, press ▶ Start shift, then do the tasks that pop up to earn wages and tips.', destId: s.employment ? CAREERS[s.employment].workplace : 'market' }
