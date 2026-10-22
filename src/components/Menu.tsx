@@ -2,7 +2,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { sfx } from '@/game/audio'
 import { GAME_CONFIG, dayOf, formatMoney } from '@/game/config'
-import { enter, signOut, useAccount } from '@/game/net/account'
+import { enter, signOut, useAccount, usernameFree } from '@/game/net/account'
 import { readCloudSave, readDeviceSave, retireDeviceSave, saveNow, type LoadResult, type SaveEnvelope } from '@/game/save'
 import { useGame } from '@/game/store'
 import { Btn, Modal } from './kit'
@@ -11,8 +11,19 @@ import { SettingsPanel } from './SettingsPanel'
 function SignIn() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [showPw, setShowPw] = useState(false)
+  const [free, setFree] = useState<boolean | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // tell players as they type whether the name is new (sign up) or taken (sign in)
+  useEffect(() => {
+    setFree(null)
+    const name = username.trim()
+    if (!/^[a-zA-Z0-9_]{3,16}$/.test(name)) return
+    let live = true
+    const t = setTimeout(() => void usernameFree(name).then((f) => live && setFree(f)), 350)
+    return () => { live = false; clearTimeout(t) }
+  }, [username])
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (busy) return
@@ -25,14 +36,20 @@ function SignIn() {
       setError(r.error)
     } else sfx('start')
   }
+  const hint = free === true ? '✨ New name: this creates your account.' : free === false ? '🔒 Name taken: enter its password to sign in.' : 'New here? Pick any username and password and you are in.'
   return (
     <form className="signin" onSubmit={submit}>
       <input className="text-input" aria-label="Username" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)}
-        autoComplete="username" autoCapitalize="off" spellCheck={false} maxLength={16} required />
-      <input className="text-input" aria-label="Password" placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-        autoComplete="current-password" minLength={6} required />
-      <button className="btn primary" type="submit" disabled={busy}>{busy ? 'Entering…' : '🚀 Enter Accra'}</button>
-      {error ? <div className="notice warn" role="alert">{error}</div> : <small className="muted">New here? Pick any username and password and you are in.</small>}
+        autoComplete="username" autoCapitalize="off" spellCheck={false} maxLength={16} required aria-describedby="signin-hint" />
+      <div className="pw-field">
+        <input className="text-input" aria-label="Password" placeholder="Password" type={showPw ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
+          autoComplete={free ? 'new-password' : 'current-password'} minLength={6} required />
+        <button type="button" className="pw-toggle" onClick={() => setShowPw((v) => !v)} aria-label={showPw ? 'Hide password' : 'Show password'} aria-pressed={showPw}>
+          {showPw ? '🙈' : '👁️'}
+        </button>
+      </div>
+      <button className="btn primary" type="submit" disabled={busy}>{busy ? 'Entering…' : free === false ? '🔑 Sign in' : free === true ? '🚀 Create & enter' : '🚀 Enter Accra'}</button>
+      {error ? <div className="notice warn" role="alert">{error}</div> : <small id="signin-hint" className={`muted signin-hint ${free === false ? 'taken' : free ? 'free' : ''}`} aria-live="polite">{hint}</small>}
     </form>
   )
 }

@@ -1,8 +1,9 @@
 'use client'
 import { useFrame } from '@react-three/fiber'
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import type * as THREE from 'three'
 import { MAX_VISIBLE_REMOTES, remotes, sampleRemote, useRemoteIds } from '@/game/net/remotes'
+import { openPlayer, useSocial } from '@/game/net/social'
 import { DEFAULT_APPEARANCE } from '@/game/content'
 import { Character, type Motion } from './Character'
 import { Label } from './Label'
@@ -68,10 +69,13 @@ function RemotePool() {
 function SlotBody({ index, assigned, motion }: { index: number; assigned: React.RefObject<(string | null)[]>; motion: Motion }) {
   const id = assigned.current?.[index]
   const st = id ? remotes.get(id)?.state : undefined
+  const bubble = useSocial((s) => (id ? s.bubbles[id] ?? '' : ''))
+  const tap = useCallback(() => { if (id) openPlayer(id) }, [id])
   return (
     <>
       <Character appearance={st?.appearance ?? DEFAULT_APPEARANCE} lite getMotion={() => motion} />
-      <Label id={`remote-${index}`} y={1.8} cls="remote-tag" text={st ? `🌐 ${st.name}` : ''} range={30} />
+      <Label id={`remote-${index}`} y={1.8} cls="remote-tag" text={st ? `🌐 ${st.name}` : ''} range={30} onTap={st ? tap : undefined} />
+      <Label id={`remote-bubble-${index}`} y={2.35} cls="chat-bubble" text={bubble} range={30} />
     </>
   )
 }

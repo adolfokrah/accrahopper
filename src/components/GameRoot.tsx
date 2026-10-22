@@ -12,6 +12,7 @@ import { areaAt } from '@/game/content'
 import { saveNow } from '@/game/save'
 import { restoreSession, useAccount } from '@/game/net/account'
 import { getNetAdapter, pruneStale } from '@/game/net/remotes'
+import { claimMomo } from '@/game/net/social'
 import { useGame } from '@/game/store'
 import { hydrateSettings, useUI } from '@/game/ui'
 import { Creator } from './Creator'
@@ -234,6 +235,11 @@ export default function GameRoot() {
       window.removeEventListener('blur', blur)
     }
   }, [])
+
+  // MoMo other players sent while you were away lands when your life loads
+  useEffect(() => useGame.subscribe((s, prev) => {
+    if (s.screen === 'game' && prev.screen !== 'game') setTimeout(() => void claimMomo(), 1500)
+  }), [])
 
   // autosave: interval, tab hide, after results
   useEffect(() => {

@@ -8,6 +8,7 @@ import { canEnter, enterHere, findMyCharacter, walkToDest } from '@/game/nav'
 import { getObjective } from '@/game/objectives'
 import { rotateCam, runtime, zoomBy } from '@/game/runtime'
 import { saveNow } from '@/game/save'
+import { PlayersPanel } from './PlayersPanel'
 import { useGame } from '@/game/store'
 import { useUI, type PanelId } from '@/game/ui'
 import { NEED_IDS, type NeedId } from '@/game/types'
@@ -519,6 +520,7 @@ export function HUD() {
         {panel === 'character' && <CharacterPanel />}
         {panel === 'home' && <HomePanel />}
         {panel === 'settings' && <SettingsPanel />}
+        {panel === 'players' && <PlayersPanel />}
       </div>
       <MinimizedPanel />
       <DecoBar />

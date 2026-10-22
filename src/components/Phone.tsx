@@ -407,7 +407,7 @@ function Wallet() {
         <div className="pc-bal"><small>Balance</small><b>{formatMoney(s.money)}</b>{s.dirty > 0 && <small className="pc-split">{formatMoney(cleanCash(s))} clean · {formatMoney(s.dirty)} dirty</small>}</div>
         <div className="pc-bot"><span>{s.profile?.name?.toUpperCase()}</span><span>•••• 2333</span></div>
       </div>
-      <p className="ios-foot center">Fictional {GAME_CONFIG.currency.name} ({GAME_CONFIG.currency.code}). Saved on this device only.</p>
+      <p className="ios-foot center">Fictional {GAME_CONFIG.currency.name} ({GAME_CONFIG.currency.code}). Saved to your account. Send to real players from 👥 Players.</p>
       <Laundering />
       <SendMoney />
       <QuickLoan />

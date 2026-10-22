@@ -15,13 +15,15 @@ interface LabelEntry {
   /** Map-pin style: category glyph and colour shown in a badge before the text. */
   icon?: string
   color?: string
+  tappable?: boolean
 }
 export const useLabels = create<{ items: Record<string, LabelEntry> }>(() => ({ items: {} }))
 const anchors = new Map<string, THREE.Object3D>()
 const ranges = new Map<string, number>()
 const els = new Map<string, HTMLDivElement>()
+const taps = new Map<string, () => void>()
 
-export function Label({ id, text, cls = 'loc-label', y = 0, range = 55, icon, color }: { id: string; text: string; cls?: string; y?: number; range?: number; icon?: string; color?: string }) {
+export function Label({ id, text, cls = 'loc-label', y = 0, range = 55, icon, color, onTap }: { id: string; text: string; cls?: string; y?: number; range?: number; icon?: string; color?: string; onTap?: () => void }) {
   const ref = useRef<THREE.Group>(null)
   useLayoutEffect(() => {
     if (ref.current) anchors.set(id, ref.current)
@@ -37,8 +39,13 @@ export function Label({ id, text, cls = 'loc-label', y = 0, range = 55, icon, co
     }
   }, [id])
   useEffect(() => {
-    useLabels.setState((s) => ({ items: { ...s.items, [id]: { text, cls, icon, color } } }))
-  }, [id, text, cls, icon, color])
+    if (onTap) taps.set(id, onTap)
+    else taps.delete(id)
+    return () => { taps.delete(id) }
+  }, [id, onTap])
+  useEffect(() => {
+    useLabels.setState((s) => ({ items: { ...s.items, [id]: { text, cls, icon, color, tappable: !!onTap } } }))
+  }, [id, text, cls, icon, color, onTap])
   return <group ref={ref} position={[0, y, 0]} />
 }
 
@@ -93,8 +100,9 @@ export function LabelLayer() {
             if (el) els.set(id, el)
             else els.delete(id)
           }}
-          className={`lbl3d ${it.cls}`}
+          className={`lbl3d ${it.cls}${it.tappable ? ' tappable' : ''}`}
           style={{ display: 'none', ...(it.color ? { ['--poi' as string]: it.color } : null) }}
+          onClick={it.tappable ? () => taps.get(id)?.() : undefined}
         >
           {it.icon ? (
             <>

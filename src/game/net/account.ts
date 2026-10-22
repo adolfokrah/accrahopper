@@ -5,6 +5,7 @@ import { syncClock } from '../clock'
 import { PRESENCE_CHANNEL } from './channel'
 import { OfflineAdapter, RealtimeAdapter, type RealtimeLike } from './presence'
 import { getNetAdapter, setNetAdapter } from './remotes'
+import { startSocial, stopSocial } from './social'
 
 export interface Account { id: string; username: string }
 
@@ -42,6 +43,16 @@ export async function restoreSession() {
   useAccount.setState({ status: 'out', user: null })
 }
 
+/** Live hint for the sign-in form: true = free (signs up), false = taken (signs in), null = unknown. */
+export async function usernameFree(username: string): Promise<boolean | null> {
+  try {
+    const r = await authClient.isUsernameAvailable({ username })
+    return r.data ? !!r.data.available : null
+  } catch {
+    return null
+  }
+}
+
 /** One step: a new username makes an account, an existing one signs in. */
 export async function enter(username: string, password: string): Promise<{ ok: true; created: boolean } | { ok: false; error: string }> {
   if (!/^[a-zA-Z0-9_]{3,16}$/.test(username)) return { ok: false, error: 'Usernames are 3–16 letters, numbers or _' }
@@ -65,6 +76,7 @@ export async function enter(username: string, password: string): Promise<{ ok: t
 }
 
 export async function signOut() {
+  stopSocial()
   setNetAdapter(new OfflineAdapter(), '')
   useAccount.setState({ status: 'out', user: null, live: false })
   await authClient.signOut().catch(() => undefined)
@@ -79,6 +91,7 @@ async function goLive(user: Account) {
     const Ably = await import('ably')
     const client = new Ably.Realtime({ authUrl: '/api/ably-token', clientId: user.id })
     setNetAdapter(new RealtimeAdapter(client as unknown as RealtimeLike, PRESENCE_CHANNEL), user.id)
+    startSocial(client, user.id)
     useAccount.setState({ live: true })
   } catch (e) {
     console.warn('[City Stories] live presence unavailable', e)

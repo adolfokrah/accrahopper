@@ -2,7 +2,7 @@
 import { create } from 'zustand'
 import { GAME_CONFIG } from './config'
 
-export type PanelId = 'none' | 'building' | 'phone' | 'character' | 'home' | 'settings' | 'help'
+export type PanelId = 'none' | 'building' | 'phone' | 'character' | 'home' | 'settings' | 'help' | 'players'
 export type PhoneTab = 'home' | 'assets' | 'jobs' | 'skills' | 'maps' | 'wallet' | 'contacts' | 'messages' | 'calendar' | 'music' | 'chat' | 'bank' | 'goals' | 'drive'
 export type Quality = 'high' | 'medium' | 'low' | 'minimal'
 

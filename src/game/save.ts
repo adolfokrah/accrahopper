@@ -31,6 +31,25 @@ export function serialize(): SaveEnvelope {
 
 let inflight: Promise<boolean> | null = null
 let queued = false
+/** Set while the server changes this save directly (MoMo); uploads wait so they cannot undo it. */
+let held: Promise<void> | null = null
+
+/**
+ * Uploads the latest life, then holds further uploads while `fn` lets the server edit the save.
+ * `fn` must mirror the server's change in the local state before it returns.
+ */
+export async function withSaveHeld<T>(fn: () => Promise<T>): Promise<T> {
+  while (held) await held
+  await saveNow()
+  let release = () => {}
+  held = new Promise((r) => (release = r))
+  try {
+    return await fn()
+  } finally {
+    held = null
+    release()
+  }
+}
 
 /**
  * Uploads the current life to the signed-in player's cloud save. Overlapping calls collapse into
@@ -38,6 +57,7 @@ let queued = false
  */
 export function saveNow(leaving = false): Promise<boolean> {
   if (useGame.getState().screen !== 'game') return Promise.resolve(false)
+  if (held) return leaving ? Promise.resolve(false) : held.then(() => saveNow())
   if (inflight && !leaving) {
     queued = true
     return inflight

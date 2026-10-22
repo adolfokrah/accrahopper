@@ -1,4 +1,7 @@
 'use client'
+import { useAccount } from '@/game/net/account'
+import { useRemoteIds } from '@/game/net/remotes'
+import { loadStats, useSocial } from '@/game/net/social'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { sfx } from '@/game/audio'
 import { BALANCE, dayOf, formatClock, formatMoney, hourOf } from '@/game/config'
@@ -43,6 +46,30 @@ export function moodOf(needs: Record<NeedId, number>): { emoji: string; label: s
 }
 
 /* ------------------------------- top bar ------------------------------- */
+/** 1234 -> "1.2k", 53_300_000 -> "53.3m". */
+const compact = (n: number) => (n < 1000 ? String(n) : n < 1e6 ? `${+(n / 1e3).toFixed(1)}k` : `${+(n / 1e6).toFixed(1)}m`)
+
+/** Who's around: everyone who has ever joined, and players online now. Opens the Players panel. */
+function PlayersPill() {
+  const online = useRemoteIds((s) => s.ids.length)
+  const live = useAccount((s) => s.live)
+  const players = useSocial((s) => s.players)
+  const badge = useSocial((s) => s.unread + s.friends.filter((f) => f.status === 'received').length)
+  useEffect(() => {
+    void loadStats()
+    const id = setInterval(() => void loadStats(), 60_000)
+    return () => clearInterval(id)
+  }, [])
+  return (
+    <button className="hb-players" onClick={() => { sfx('click'); useSocial.setState({ card: null, thread: null }); useUI.getState().setPanel('players') }}
+      aria-label={`Players: ${players ?? 'unknown'} joined${live ? `, ${online + 1} online` : ''}${badge ? `, ${badge} new` : ''}`}>
+      <span className="hb-joined"><span aria-hidden>👀</span>{players === null ? '…' : compact(players)}</span>
+      {live && <span className="hb-online"><i className="dot on" aria-hidden />{compact(online + 1)} online</span>}
+      {badge > 0 && <i className="hb-badge">{badge}</i>}
+    </button>
+  )
+}
+
 export function TopPill() {
   const money = useGame((s) => s.money)
   const dirty = useGame((s) => s.dirty)
@@ -78,6 +105,8 @@ export function TopPill() {
           <span aria-hidden>{mood.emoji}</span>
           <b>{mood.label}</b>
         </button>
+        <span className="hb-sep" />
+        <PlayersPill />
         <span className="hb-grow" />
         <button className="hb-icon" onClick={() => { sfx('click'); useUI.getState().setPanel('settings') }} aria-label="Settings">{Icons.gear}</button>
         <button className="hb-money" onClick={wallet} aria-label="Wallet">

@@ -5026,3 +5026,237 @@ button.ios-row:active {
   text-decoration: underline;
   cursor: pointer;
 }
+.pw-field {
+  position: relative;
+}
+.pw-field .text-input {
+  width: 100%;
+  padding-right: 44px;
+}
+.pw-toggle {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: none;
+  font-size: 1.05rem;
+  cursor: pointer;
+  border-radius: 10px;
+}
+.pw-toggle:focus-visible {
+  outline: 2px solid var(--sky-d);
+}
+.signin-hint.taken {
+  color: #a0611a;
+}
+.signin-hint.free {
+  color: var(--green-d);
+}
+
+/* ------------------------------ players ------------------------------ */
+.lbl3d.tappable {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.chat-bubble {
+  max-width: 200px;
+  white-space: normal;
+  background: #fff;
+  color: var(--ink);
+  font: 700 12px/1.3 ui-rounded, system-ui, sans-serif;
+  padding: 5px 9px;
+  border-radius: 12px 12px 12px 3px;
+  box-shadow: var(--shadow-s);
+}
+.chat-bubble:empty {
+  display: none;
+}
+.hb-players {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: none;
+  color: inherit;
+  padding: 2px 4px;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  position: relative;
+  white-space: nowrap;
+}
+.hb-joined {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.hb-online {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--green-d);
+  font-weight: 700;
+}
+.hb-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 99px;
+  background: var(--red);
+  color: #fff;
+  font: 800 10px/16px ui-rounded, system-ui, sans-serif;
+  text-align: center;
+  font-style: normal;
+}
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #b9c2cf;
+  flex: none;
+}
+.dot.on {
+  background: var(--green);
+}
+.seg {
+  display: flex;
+  gap: 4px;
+  background: rgba(31, 45, 69, 0.06);
+  border-radius: 12px;
+  padding: 3px;
+  margin-bottom: 10px;
+}
+.seg button {
+  flex: 1;
+  border: 0;
+  background: none;
+  padding: 7px 4px;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+}
+.seg button.on {
+  background: var(--panel-solid);
+  color: var(--ink);
+  box-shadow: var(--shadow-s);
+}
+.plist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.plist li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.prow {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: var(--panel-solid);
+  border-radius: 12px;
+  padding: 9px 11px;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.say-row {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0;
+}
+.say-row .text-input {
+  flex: 1;
+  min-width: 0;
+}
+.nearby-log {
+  font-size: 0.8rem;
+  background: rgba(31, 45, 69, 0.05);
+  border-radius: 10px;
+  padding: 6px 9px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.emote-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.emote {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--line);
+  background: var(--panel-solid);
+  border-radius: 12px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--ink);
+}
+.emote span {
+  font-size: 1.3rem;
+}
+.emote:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.dm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 45vh;
+  overflow: auto;
+  padding: 6px 0;
+}
+.dm {
+  align-self: flex-start;
+  max-width: 80%;
+  background: rgba(31, 45, 69, 0.07);
+  border-radius: 14px 14px 14px 4px;
+  padding: 6px 10px;
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+.dm.mine {
+  align-self: flex-end;
+  background: var(--blue);
+  color: #fff;
+  border-radius: 14px 14px 4px 14px;
+}
+small.err {
+  color: var(--red);
+}

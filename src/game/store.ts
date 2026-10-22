@@ -262,6 +262,9 @@ export interface GameState {
   sellFurniture: (uid: number) => void
   chooseProject: (plotId: string, project: ProjectId) => void
   buyUpgrade: (id: string) => void
+  /** Mirror MoMo the server already moved between players' saves. */
+  playerMomoSent: (to: string, amount: number, fee: number) => void
+  playerMomoReceived: (items: { name: string; amount: number }[]) => void
 }
 
 export interface PlotState {
@@ -2835,6 +2838,21 @@ export const useGame = create<GameState>((set, get) => ({
     track(d, 'momo')
     set(d)
     toast(`📲 Sent ${formatMoney(amount)} to ${npc.name}`, 'good')
+  },
+
+  playerMomoSent: (to, amount, fee) => {
+    const d = draft(get())
+    spend(d, amount, `MoMo to ${to}`, 'transfer', true)
+    if (fee) spend(d, fee, 'E-levy (1%)', 'fee', true)
+    track(d, 'momo')
+    set(d)
+  },
+
+  playerMomoReceived: (items) => {
+    if (!items.length) return
+    const d = draft(get())
+    for (const it of items) earn(d, it.amount, `MoMo from ${it.name}`, 'transfer')
+    set(d)
   },
 
   /* ------------------------------ bank & invest ------------------------------ */

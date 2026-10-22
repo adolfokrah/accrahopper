@@ -6,6 +6,8 @@ import { DEFAULT_APPEARANCE, DEST_BY_ID, HOMES, NPCS } from '@/game/content'
 import { hourOf } from '@/game/config'
 import { findMyCharacter, walkToPoint } from '@/game/nav'
 import { camBasis, runtime, setZoom, turnCam, zoomBy, defaultZoom } from '@/game/runtime'
+import { useAccount } from '@/game/net/account'
+import { useSocial } from '@/game/net/social'
 import { useGame } from '@/game/store'
 import { QUALITY_ORDER, QUALITY, useUI } from '@/game/ui'
 import { MAP_H, MAP_W } from '@/game/world'
@@ -355,6 +357,7 @@ function Player() {
     g.current.position.set(runtime.player.x, 0.12, runtime.player.z)
     g.current.rotation.y = runtime.player.rot
   })
+  const myBubble = useSocial((s) => { const id = useAccount.getState().user?.id; return id ? s.bubbles[id] ?? '' : '' })
   if (screen !== 'game' || hidden) return null
   return (
     <group ref={g}>
@@ -364,6 +367,7 @@ function Player() {
         <meshBasicMaterial color="#ffffff" transparent opacity={0.8} />
       </mesh>
       <Label id="you-world" y={1.75} cls="you-tag" text={activity ? `${activity.icon} ${Math.round((activity.done / activity.total) * 100)}%` : profile?.name ?? 'You'} />
+      <Label id="you-bubble" y={2.3} cls="chat-bubble" text={myBubble} />
     </group>
   )
 }
