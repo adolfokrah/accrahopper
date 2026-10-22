@@ -11,6 +11,8 @@ export interface ActLook {
 
 /** How each activity looks when performed. Keys are activity ids (prefix before ':'). */
 export const ACT_LOOK: Record<string, ActLook> = {
+  // passed out from exhaustion: lying where you dropped
+  collapse: { pose: 'lie' },
   // chop bar
   waakye: { pose: 'eat', prop: 'plate' }, banku: { pose: 'eat', prop: 'plate' }, kelewele: { pose: 'eat', prop: 'plate' }, sobolo: { pose: 'eat', prop: 'drink' },
   dishes: { pose: 'clean' },

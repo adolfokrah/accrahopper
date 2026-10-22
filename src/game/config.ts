@@ -33,7 +33,7 @@ export const BALANCE = {
   lowNeed: 20,
   lowNeedPayPenalty: 0.1, // per need below `lowNeed`
   starvingEnergyDrain: 1.5, // extra energy/hour while hunger is 0
-  collapse: { minutes: 240, energyRestored: 45 },
+  collapse: { minutes: 60, energyRestored: 45 },
 
   walkSpeed: 3.8, // tiles per second
   doorRadius: 2.6, // tiles from a door to count as "at the building"

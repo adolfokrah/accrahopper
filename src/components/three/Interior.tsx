@@ -989,6 +989,8 @@ export function Interior({ visible }: { visible: boolean }) {
       if (a && !runtime.frozen) runtime.insideTarget = { x: a.x, z: a.z }
     }
     lastSel.current = selected
+    // passed out: drop right where you stand
+    if (!target && activity?.kind === 'collapse') target = { x: c.x, z: c.z, face: player.current.rotation.y, pose: 'lie', prop: null, perform: true }
 
     if (target) {
       const via = nextStep(target.x, target.z)
